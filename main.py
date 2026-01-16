@@ -396,6 +396,46 @@ def normalize_audio_func(
     logger.success(f"Audio normalized: {output_file}")
 
 
+def burn_subtitles_func(
+    input_file: str,
+    subtitle_file: str,
+    output_file: str,
+    gpu: bool = True,
+) -> None:
+    """Burn subtitles into video."""
+    logger.info(f"Burning subtitles into video: {input_file}")
+
+    style = (
+        "FontName=Source Han Sans SC,"
+        "FontSize=20,"
+        "PrimaryColour=&HFFFFFF,"
+        "OutlineColour=&H000000,"
+        "Outline=2,"
+        "Shadow=1,"
+        "Bold=1,"
+        "MarginV=30,"
+        "Alignment=2"
+    )
+
+    vf_filter = f"subtitles={subtitle_file}:force_style='{style}'"
+
+    cmd = ["ffmpeg", "-i", input_file, "-vf", vf_filter]
+
+    if gpu:
+        cmd.extend(["-c:v", "h264_nvenc", "-preset", "p1", "-cq", "28"])
+    else:
+        cmd.extend(["-c:v", "libx264", "-preset", "ultrafast", "-crf", "28"])
+
+    cmd.extend(["-c:a", "copy", "-y", output_file, "-loglevel", "warning"])
+
+    try:
+        subprocess.run(cmd, check=True)
+        logger.success(f"Subtitles burned into video: {output_file}")
+    except subprocess.CalledProcessError:
+        logger.error("Failed to burn subtitles into video")
+        sys.exit(1)
+
+
 def mix_with_background_music_func(
     video_file: str,
     background_music: str,
@@ -508,18 +548,37 @@ def mix(
 @app.command()
 def process(
     input_video: str,
-    background_music: str,
     output_video: str,
-    start_trim: str,
-    end_trim: str,
+    start_trim: str = typer.Option("0", help="Trim from start (HH:MM:SS or seconds)"),
+    end_trim: str = typer.Option("0", help="Trim from end (HH:MM:SS or seconds)"),
+    background_music: Optional[str] = typer.Option(None, help="Background music file"),
     target_volume: float = typer.Option(-16.0, help="Target volume in dB"),
     music_volume: float = typer.Option(0.3, help="Music volume"),
+    generate_srt: bool = typer.Option(False, "--srt", help="Generate SRT subtitles"),
+    burn_srt: bool = typer.Option(
+        False, "--burn-srt", help="Burn subtitles into output video"
+    ),
+    srt_output: Optional[str] = typer.Option(None, help="Output SRT file path"),
+    language: str = typer.Option(
+        "zh,en", help="Language hints for transcription (comma-separated)"
+    ),
+    gpu: bool = typer.Option(True, help="Use GPU acceleration for subtitle burning"),
 ):
-    """Run full processing pipeline."""
+    """Run full processing pipeline with optional subtitle generation."""
     logger.info("Starting full video processing pipeline...")
+
+    if not os.path.exists(input_video):
+        logger.error(f"Input video not found: {input_video}")
+        sys.exit(1)
+
+    # If burn_srt is requested, generate_srt must also be enabled
+    if burn_srt:
+        generate_srt = True
 
     temp_trimmed = f"temp_trimmed_{random.randint(1000, 9999)}.mp4"
     temp_normalized = f"temp_normalized_{random.randint(1000, 9999)}.mp4"
+    temp_audio = f"temp_audio_{random.randint(1000, 9999)}.wav"
+    temp_mixed = f"temp_mixed_{random.randint(1000, 9999)}.mp4"
 
     current_input = input_video
 
@@ -533,19 +592,69 @@ def process(
     normalize_audio_func(current_input, temp_normalized, target_volume)
     current_input = temp_normalized
 
+    # Determine intermediate output (before subtitle burning)
+    intermediate_output = temp_mixed if burn_srt else output_video
+
     # Step 3: Mix
     if background_music and os.path.exists(background_music):
         mix_with_background_music_func(
-            current_input, background_music, output_video, music_volume
+            current_input, background_music, intermediate_output, music_volume
         )
     else:
-        logger.warning(
-            "No background music provided or file not found. Copying video..."
-        )
-        shutil.copy(current_input, output_video)
+        if background_music:
+            logger.warning(
+                f"Background music file not found: {background_music}. Copying video..."
+            )
+        shutil.copy(current_input, intermediate_output)
+
+    # Step 4: Generate SRT subtitles
+    srt_file = None
+    if generate_srt:
+        logger.info("Generating SRT subtitles...")
+
+        # Determine SRT output path
+        if srt_output is None:
+            filename, _ = os.path.splitext(output_video)
+            srt_file = f"{filename}.srt"
+        else:
+            srt_file = srt_output
+
+        # Extract audio from the intermediate video
+        extract_audio_func(intermediate_output, temp_audio)
+
+        # Transcribe audio
+        language_hints = [lang.strip() for lang in language.split(",")]
+        logger.info(f"Language hints: {language_hints}")
+
+        try:
+            results = transcribe_audio_func(temp_audio, language_hints)
+
+            if not results:
+                logger.warning("No transcription results received")
+                srt_file = None
+            else:
+                srt_content = generate_srt_from_transcription(results)
+
+                if not srt_content.strip():
+                    logger.warning("Transcription returned empty results")
+                    srt_file = None
+                else:
+                    with open(srt_file, "w", encoding="utf-8") as f:
+                        f.write(srt_content)
+                    logger.success(f"Subtitle file saved: {srt_file}")
+        finally:
+            if os.path.exists(temp_audio):
+                os.remove(temp_audio)
+
+    # Step 5: Burn subtitles into final video
+    if burn_srt and srt_file and os.path.exists(srt_file):
+        burn_subtitles_func(intermediate_output, srt_file, output_video, gpu)
+    elif burn_srt:
+        logger.warning("No SRT file available, skipping subtitle burning")
+        shutil.copy(intermediate_output, output_video)
 
     # Cleanup
-    for f in [temp_trimmed, temp_normalized]:
+    for f in [temp_trimmed, temp_normalized, temp_mixed]:
         if os.path.exists(f):
             os.remove(f)
 
