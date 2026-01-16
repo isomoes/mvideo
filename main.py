@@ -317,7 +317,8 @@ def format_srt_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
-def trim_video_func(input_file: str, output_file: str, start_trim: str, end_trim: str):
+def trim_video_func(input_file: str, start_trim: str, end_trim: str):
+    """Trim video from start/end (modifies original file in-place)."""
     logger.info(f"Trimming video: {input_file}")
 
     duration = get_video_duration(input_file)
@@ -343,6 +344,8 @@ def trim_video_func(input_file: str, output_file: str, start_trim: str, end_trim
 
     logger.info(f"New duration: {duration_trim} seconds")
 
+    temp_file = f"temp_trim_{random.randint(1000, 9999)}.mp4"
+
     cmd = [
         "ffmpeg",
         "-i",
@@ -351,17 +354,19 @@ def trim_video_func(input_file: str, output_file: str, start_trim: str, end_trim
         str(start_seconds),
         "-t",
         str(duration_trim),
-        "-c:v",
-        "libx264",
-        "-c:a",
-        "aac",
+        "-c",
+        "copy",
         "-y",
-        output_file,
+        temp_file,
         "-loglevel",
         "warning",
     ]
     subprocess.run(cmd, check=True)
-    logger.success(f"Video trimmed successfully: {output_file}")
+
+    # Replace original file with trimmed version
+    shutil.move(temp_file, input_file)
+
+    logger.success(f"Video trimmed successfully: {input_file}")
 
 
 def normalize_audio_func(
@@ -465,9 +470,9 @@ def callback():
 
 
 @app.command()
-def trim(input_video: str, output_video: str, start_trim: str, end_trim: str):
-    """Trim video from start/end."""
-    trim_video_func(input_video, output_video, start_trim, end_trim)
+def trim(input_video: str, start_trim: str, end_trim: str):
+    """Trim video from start/end (modifies original file in-place)."""
+    trim_video_func(input_video, start_trim, end_trim)
 
 
 @app.command()
@@ -520,8 +525,8 @@ def process(
 
     # Step 1: Trim
     if start_trim != "0" or end_trim != "0":
-        trim_video_func(current_input, temp_trimmed, start_trim, end_trim)
-        current_input = temp_trimmed
+        trim_video_func(current_input, start_trim, end_trim)
+        # File is modified in-place, current_input still points to same file
 
     # Step 2: Normalize
     logger.info("Normalizing video audio...")
