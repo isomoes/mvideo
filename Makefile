@@ -1,4 +1,4 @@
-.PHONY: setup run clean help
+.PHONY: setup run clean pyinstall help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -15,6 +15,10 @@ clean: ## Clean up temporary files and caches
 	rm -rf .venv
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
+
+pyinstall: ## Install the package to the system
+	@echo "Installing mvideo to the system..."
+	uv pip install .
 
 help: ## Show this help message
 	@echo "Usage: make [target]"
