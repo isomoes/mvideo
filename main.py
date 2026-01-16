@@ -4,59 +4,43 @@ import subprocess
 import re
 import random
 import shutil
-import click
-from rich.console import Console
-from rich.theme import Theme
+import typer
+from loguru import logger
+from typing import Optional
 
-# Setup rich console
-custom_theme = Theme(
-    {"info": "cyan", "success": "green", "warning": "yellow", "error": "red bold"}
-)
-console = Console(theme=custom_theme)
+# Configure loguru to remove default handler and add a new one with a specific format if needed
+# But default loguru is usually good enough.
+# Let's just use the default configuration which prints to stderr.
 
-
-def print_info(msg):
-    console.print(f"[info][INFO] {msg}[/info]")
-
-
-def print_success(msg):
-    console.print(f"[success][SUCCESS] {msg}[/success]")
-
-
-def print_warning(msg):
-    console.print(f"[warning][WARNING] {msg}[/warning]")
-
-
-def print_error(msg):
-    console.print(f"[error][ERROR] {msg}[/error]")
+app = typer.Typer(help="Video Processor for OBS Recordings and Subtitles")
 
 
 def check_dependencies():
     """Check if ffmpeg is installed."""
     if not shutil.which("ffmpeg"):
-        print_error("FFmpeg is not installed. Please install it first.")
+        logger.error("FFmpeg is not installed. Please install it first.")
         sys.exit(1)
 
 
-def parse_time(time_input):
+def parse_time(time_input: str) -> float:
     """Parse time format (HH:MM:SS or seconds) to seconds."""
     if not time_input:
-        return 0
+        return 0.0
 
     # Check if it's HH:MM:SS
     if re.match(r"^\d+:\d+:\d+$", str(time_input)):
         h, m, s = map(int, time_input.split(":"))
-        return h * 3600 + m * 60 + s
+        return float(h * 3600 + m * 60 + s)
 
     # Check if it's just seconds (integer or float string)
     if re.match(r"^\d+(\.\d+)?$", str(time_input)):
         return float(time_input)
 
-    print_error(f"Invalid time format: {time_input}. Use HH:MM:SS or seconds")
+    logger.error(f"Invalid time format: {time_input}. Use HH:MM:SS or seconds")
     sys.exit(1)
 
 
-def get_video_duration(input_file):
+def get_video_duration(input_file: str) -> float:
     cmd = [
         "ffprobe",
         "-v",
@@ -71,12 +55,12 @@ def get_video_duration(input_file):
     try:
         return float(result.stdout.strip())
     except ValueError:
-        print_error(f"Could not determine duration for {input_file}")
+        logger.error(f"Could not determine duration for {input_file}")
         sys.exit(1)
 
 
-def analyze_audio_volume_func(input_file):
-    print_info(f"Analyzing audio volume for: {input_file}")
+def analyze_audio_volume_func(input_file: str) -> float:
+    logger.info(f"Analyzing audio volume for: {input_file}")
 
     cmd = [
         "ffmpeg",
@@ -100,42 +84,42 @@ def analyze_audio_volume_func(input_file):
     mean_volume = 0.0
     if mean_volume_match:
         mean_volume = float(mean_volume_match.group(1))
-        print_info(f"Mean volume: {mean_volume} dB")
+        logger.info(f"Mean volume: {mean_volume} dB")
     else:
-        print_warning("Could not find mean volume")
+        logger.warning("Could not find mean volume")
 
     if max_volume_match:
         max_volume = float(max_volume_match.group(1))
-        print_info(f"Max volume: {max_volume} dB")
+        logger.info(f"Max volume: {max_volume} dB")
 
     return mean_volume
 
 
-def trim_video_func(input_file, output_file, start_trim, end_trim):
-    print_info(f"Trimming video: {input_file}")
+def trim_video_func(input_file: str, output_file: str, start_trim: str, end_trim: str):
+    logger.info(f"Trimming video: {input_file}")
 
     duration = get_video_duration(input_file)
-    print_info(f"Original video duration: {int(duration)} seconds")
+    logger.info(f"Original video duration: {int(duration)} seconds")
 
     start_seconds = parse_time(start_trim)
     end_seconds_trim = parse_time(end_trim)
 
     if start_seconds > 0:
-        print_info(f"Trimming {start_seconds} seconds from start")
+        logger.info(f"Trimming {start_seconds} seconds from start")
 
     if end_seconds_trim > 0:
-        print_info(f"Trimming {end_seconds_trim} seconds from end")
+        logger.info(f"Trimming {end_seconds_trim} seconds from end")
 
     end_time = duration - end_seconds_trim
     duration_trim = end_time - start_seconds
 
     if duration_trim <= 0:
-        print_error(
+        logger.error(
             "Invalid trim parameters. Resulting duration would be negative or zero."
         )
         sys.exit(1)
 
-    print_info(f"New duration: {duration_trim} seconds")
+    logger.info(f"New duration: {duration_trim} seconds")
 
     cmd = [
         "ffmpeg",
@@ -155,16 +139,18 @@ def trim_video_func(input_file, output_file, start_trim, end_trim):
         "warning",
     ]
     subprocess.run(cmd, check=True)
-    print_success(f"Video trimmed successfully: {output_file}")
+    logger.success(f"Video trimmed successfully: {output_file}")
 
 
-def normalize_audio_func(input_file, output_file, target_volume=-16.0):
-    print_info(f"Normalizing audio to {target_volume} dB")
+def normalize_audio_func(
+    input_file: str, output_file: str, target_volume: float = -16.0
+):
+    logger.info(f"Normalizing audio to {target_volume} dB")
 
     current_volume = analyze_audio_volume_func(input_file)
     adjustment = target_volume - current_volume
 
-    print_info(f"Adjusting volume by {adjustment:.2f} dB")
+    logger.info(f"Adjusting volume by {adjustment:.2f} dB")
 
     cmd = [
         "ffmpeg",
@@ -180,15 +166,19 @@ def normalize_audio_func(input_file, output_file, target_volume=-16.0):
         "warning",
     ]
     subprocess.run(cmd, check=True)
-    print_success(f"Audio normalized: {output_file}")
+    logger.success(f"Audio normalized: {output_file}")
 
 
 def mix_with_background_music_func(
-    video_file, background_music, output_file, music_volume=0.3, video_audio_volume=1.0
+    video_file: str,
+    background_music: str,
+    output_file: str,
+    music_volume: float = 0.3,
+    video_audio_volume: float = 1.0,
 ):
-    print_info("Mixing video with background music")
-    print_info(f"Background music volume: {music_volume}")
-    print_info(f"Video audio volume: {video_audio_volume}")
+    logger.info("Mixing video with background music")
+    logger.info(f"Background music volume: {music_volume}")
+    logger.info(f"Video audio volume: {video_audio_volume}")
 
     video_duration = get_video_duration(video_file)
 
@@ -241,75 +231,65 @@ def mix_with_background_music_func(
     if os.path.exists(temp_music):
         os.remove(temp_music)
 
-    print_success(f"Audio mixed successfully: {output_file}")
+    logger.success(f"Audio mixed successfully: {output_file}")
 
 
-@click.group()
-def cli():
-    """Video Processor for OBS Recordings and Subtitles"""
+@app.callback()
+def callback():
+    """
+    Video Processor for OBS Recordings and Subtitles
+    """
     check_dependencies()
 
 
-@cli.command()
-@click.argument("input_video")
-@click.argument("output_video")
-@click.argument("start_trim")
-@click.argument("end_trim")
-def trim(input_video, output_video, start_trim, end_trim):
+@app.command()
+def trim(input_video: str, output_video: str, start_trim: str, end_trim: str):
     """Trim video from start/end."""
     trim_video_func(input_video, output_video, start_trim, end_trim)
 
 
-@cli.command()
-@click.argument("input_video")
-@click.argument("output_video")
-@click.option(
-    "--target-volume", default=-16.0, help="Target volume in dB (default -16)"
-)
-def normalize(input_video, output_video, target_volume):
+@app.command()
+def normalize(
+    input_video: str,
+    output_video: str,
+    target_volume: float = typer.Option(-16.0, help="Target volume in dB"),
+):
     """Normalize audio to a target volume."""
     normalize_audio_func(input_video, output_video, target_volume)
 
 
-@cli.command()
-@click.argument("input_video")
-def analyze(input_video):
+@app.command()
+def analyze(input_video: str):
     """Analyze audio volume."""
     analyze_audio_volume_func(input_video)
 
 
-@cli.command()
-@click.argument("input_video")
-@click.argument("background_music")
-@click.argument("output_video")
-@click.option("--music-volume", default=0.3, help="Music volume (0.0-1.0)")
-@click.option("--video-volume", default=1.0, help="Video audio volume (0.0-1.0)")
-def mix(input_video, background_music, output_video, music_volume, video_volume):
+@app.command()
+def mix(
+    input_video: str,
+    background_music: str,
+    output_video: str,
+    music_volume: float = typer.Option(0.3, help="Music volume (0.0-1.0)"),
+    video_volume: float = typer.Option(1.0, help="Video audio volume (0.0-1.0)"),
+):
     """Mix video with background music."""
     mix_with_background_music_func(
         input_video, background_music, output_video, music_volume, video_volume
     )
 
 
-@cli.command()
-@click.argument("input_video")
-@click.argument("background_music")
-@click.argument("output_video")
-@click.argument("start_trim")
-@click.argument("end_trim")
-@click.option("--target-volume", default=-16.0, help="Target volume in dB")
-@click.option("--music-volume", default=0.3, help="Music volume")
+@app.command()
 def process(
-    input_video,
-    background_music,
-    output_video,
-    start_trim,
-    end_trim,
-    target_volume,
-    music_volume,
+    input_video: str,
+    background_music: str,
+    output_video: str,
+    start_trim: str,
+    end_trim: str,
+    target_volume: float = typer.Option(-16.0, help="Target volume in dB"),
+    music_volume: float = typer.Option(0.3, help="Music volume"),
 ):
     """Run full processing pipeline."""
-    print_info("Starting full video processing pipeline...")
+    logger.info("Starting full video processing pipeline...")
 
     temp_trimmed = f"temp_trimmed_{random.randint(1000, 9999)}.mp4"
     temp_normalized = f"temp_normalized_{random.randint(1000, 9999)}.mp4"
@@ -322,7 +302,7 @@ def process(
         current_input = temp_trimmed
 
     # Step 2: Normalize
-    print_info("Normalizing video audio...")
+    logger.info("Normalizing video audio...")
     normalize_audio_func(current_input, temp_normalized, target_volume)
     current_input = temp_normalized
 
@@ -332,7 +312,7 @@ def process(
             current_input, background_music, output_video, music_volume
         )
     else:
-        print_warning(
+        logger.warning(
             "No background music provided or file not found. Copying video..."
         )
         shutil.copy(current_input, output_video)
@@ -342,33 +322,32 @@ def process(
         if os.path.exists(f):
             os.remove(f)
 
-    print_success(f"Video processing complete: {output_video}")
+    logger.success(f"Video processing complete: {output_video}")
 
 
-@cli.command()
-@click.argument("input_video")
-@click.argument("subtitle_file")
-@click.option("--output-video", help="Output video filename")
-@click.option(
-    "--gpu/--no-gpu", default=True, help="Use GPU acceleration (default: True)"
-)
-def add_subtitles(input_video, subtitle_file, output_video, gpu):
+@app.command()
+def add_subtitles(
+    input_video: str,
+    subtitle_file: str,
+    output_video: Optional[str] = typer.Option(None, help="Output video filename"),
+    gpu: bool = typer.Option(True, help="Use GPU acceleration"),
+):
     """Add subtitles to video with Source Han font."""
     if not output_video:
         filename, ext = os.path.splitext(input_video)
         output_video = f"{filename}_with_subs{ext}"
 
     if not os.path.exists(input_video):
-        print_error(f"Input video not found: {input_video}")
+        logger.error(f"Input video not found: {input_video}")
         sys.exit(1)
 
     if not os.path.exists(subtitle_file):
-        print_error(f"Subtitle file not found: {subtitle_file}")
+        logger.error(f"Subtitle file not found: {subtitle_file}")
         sys.exit(1)
 
-    print_info(f"Input video: {input_video}")
-    print_info(f"Subtitle file: {subtitle_file}")
-    print_info(f"Output video: {output_video}")
+    logger.info(f"Input video: {input_video}")
+    logger.info(f"Subtitle file: {subtitle_file}")
+    logger.info(f"Output video: {output_video}")
 
     style = (
         "FontName=Source Han Sans SC,"
@@ -382,11 +361,17 @@ def add_subtitles(input_video, subtitle_file, output_video, gpu):
         "Alignment=2"
     )
 
+    # Escape style string for ffmpeg
+    # Note: In the original code it was just passed in f-string.
+    # But complex filters often need escaping.
+    # The original code: vf_filter = f"subtitles={subtitle_file}:force_style='{style}'"
+    # This looks correct for most cases.
+
     vf_filter = f"subtitles={subtitle_file}:force_style='{style}'"
 
     cmd = ["ffmpeg"]
     if gpu:
-        print_info("Using GPU acceleration (NVIDIA NVENC)...")
+        logger.info("Using GPU acceleration (NVIDIA NVENC)...")
         cmd.extend(["-hwaccel", "cuda"])
 
     cmd.extend(["-i", input_video, "-vf", vf_filter])
@@ -400,11 +385,11 @@ def add_subtitles(input_video, subtitle_file, output_video, gpu):
 
     try:
         subprocess.run(cmd, check=True)
-        print_success(f"Success! Output saved to: {output_video}")
+        logger.success(f"Success! Output saved to: {output_video}")
     except subprocess.CalledProcessError:
-        print_error("ffmpeg command failed")
+        logger.error("ffmpeg command failed")
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    cli()
+    app()
