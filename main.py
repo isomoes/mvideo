@@ -1,12 +1,21 @@
+import json
 import os
-import sys
-import subprocess
-import re
 import random
+import re
 import shutil
-import typer
-from loguru import logger
+import subprocess
+import sys
+import uuid
+from http import HTTPStatus
+from pathlib import Path
 from typing import Optional
+from urllib import request
+
+import alibabacloud_oss_v2 as oss
+import dashscope
+import typer
+from dashscope.audio.asr import Transcription
+from loguru import logger
 
 # Configure loguru to remove default handler and add a new one with a specific format if needed
 # But default loguru is usually good enough.
@@ -93,6 +102,209 @@ def analyze_audio_volume_func(input_file: str) -> float:
         logger.info(f"Max volume: {max_volume} dB")
 
     return mean_volume
+
+
+def get_oss_client() -> tuple[oss.Client, str]:
+    """Get OSS client and bucket name from environment variables."""
+    access_key_id = os.getenv("OSS_ACCESS_KEY_ID")
+    access_key_secret = os.getenv("OSS_ACCESS_KEY_SECRET")
+    endpoint = os.getenv("OSS_ENDPOINT")
+    bucket_name = os.getenv("OSS_BUCKET_NAME")
+
+    if not all([access_key_id, access_key_secret, endpoint, bucket_name]):
+        logger.error(
+            "OSS environment variables not set. Required: "
+            "OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET, OSS_ENDPOINT, OSS_BUCKET_NAME"
+        )
+        sys.exit(1)
+
+    credentials_provider = oss.credentials.StaticCredentialsProvider(
+        access_key_id, access_key_secret
+    )
+    cfg = oss.config.load_default()
+    cfg.credentials_provider = credentials_provider
+    cfg.endpoint = endpoint
+    cfg.region = os.getenv("OSS_REGION", "cn-hangzhou")
+
+    client = oss.Client(cfg)
+    return client, str(bucket_name)
+
+
+def upload_file_to_oss(file_path: str, object_key: str | None = None) -> str:
+    """Upload file to OSS and return the public URL."""
+    client, bucket_name = get_oss_client()
+
+    if object_key is None:
+        # Generate unique object key
+        file_ext = Path(file_path).suffix
+        object_key = f"mvideo/temp/{uuid.uuid4().hex}{file_ext}"
+
+    logger.info(f"Uploading {file_path} to OSS: {object_key}")
+
+    with open(file_path, "rb") as f:
+        result = client.put_object(
+            oss.PutObjectRequest(
+                bucket=bucket_name,
+                key=object_key,
+                body=f,
+            )
+        )
+
+    if result.status_code != 200:
+        logger.error(f"Failed to upload file to OSS: {result}")
+        sys.exit(1)
+
+    # Generate public URL
+    endpoint = os.getenv("OSS_ENDPOINT", "")
+    # Remove https:// prefix if present for constructing URL
+    endpoint_host = endpoint.replace("https://", "").replace("http://", "")
+    public_url = f"https://{bucket_name}.{endpoint_host}/{object_key}"
+
+    logger.success(f"File uploaded: {public_url}")
+    return public_url
+
+
+def delete_oss_file(object_key: str) -> None:
+    """Delete file from OSS."""
+    client, bucket_name = get_oss_client()
+
+    try:
+        client.delete_object(
+            oss.DeleteObjectRequest(
+                bucket=bucket_name,
+                key=object_key,
+            )
+        )
+        logger.info(f"Deleted OSS file: {object_key}")
+    except Exception as e:
+        logger.warning(f"Failed to delete OSS file {object_key}: {e}")
+
+
+def extract_audio_func(input_file: str, output_file: str) -> None:
+    """Extract audio from video file."""
+    logger.info(f"Extracting audio from: {input_file}")
+
+    cmd = [
+        "ffmpeg",
+        "-i",
+        input_file,
+        "-vn",
+        "-acodec",
+        "pcm_s16le",
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-y",
+        output_file,
+        "-loglevel",
+        "warning",
+    ]
+    subprocess.run(cmd, check=True)
+    logger.success(f"Audio extracted: {output_file}")
+
+
+def transcribe_audio_func(
+    audio_file: str,
+    language_hints: list[str] | None = None,
+) -> list[dict]:
+    """Transcribe audio file using DashScope ASR SDK."""
+    api_key = os.getenv("DASHSCOPE_API_KEY")
+    if not api_key:
+        logger.error("DASHSCOPE_API_KEY environment variable is not set")
+        sys.exit(1)
+
+    dashscope.api_key = api_key
+    dashscope.base_http_api_url = "https://dashscope.aliyuncs.com/api/v1"
+
+    if language_hints is None:
+        language_hints = ["zh", "en"]
+
+    # Upload audio file to user's OSS bucket
+    logger.info("Uploading audio file to OSS...")
+    oss_url = upload_file_to_oss(audio_file)
+    logger.info(f"Audio uploaded: {oss_url}")
+
+    # Start transcription using DashScope SDK
+    logger.info("Starting transcription...")
+    task_response = Transcription.async_call(
+        model="paraformer-v2",
+        file_urls=[oss_url],
+        language_hints=language_hints,
+    )
+
+    if task_response.status_code != HTTPStatus.OK:
+        logger.error(f"Failed to start transcription: {task_response.output.message}")
+        sys.exit(1)
+
+    logger.info(f"Task created: {task_response.output.task_id}")
+
+    # Wait for transcription to complete
+    logger.info("Waiting for transcription to complete...")
+    transcription_response = Transcription.wait(task=task_response.output.task_id)
+
+    if transcription_response.status_code != HTTPStatus.OK:
+        logger.error(f"Transcription failed: {transcription_response.output.message}")
+        sys.exit(1)
+
+    logger.success("Transcription completed successfully")
+
+    # Fetch transcription results
+    results = []
+    for transcription in transcription_response.output.get("results", []):
+        if transcription.get("subtask_status") == "SUCCEEDED":
+            url = transcription.get("transcription_url")
+            if url:
+                result = json.loads(request.urlopen(url).read().decode("utf8"))
+                results.append(result)
+        else:
+            logger.warning(f"Subtask failed: {transcription}")
+
+    return results
+
+
+def generate_srt_from_transcription(transcription_results: list[dict]) -> str:
+    """Generate SRT content from transcription results."""
+    srt_lines = []
+    subtitle_index = 1
+
+    for result in transcription_results:
+        if "transcripts" not in result:
+            continue
+
+        for transcript in result["transcripts"]:
+            if "sentences" not in transcript:
+                continue
+
+            for sentence in transcript["sentences"]:
+                start_time = sentence.get("begin_time", 0) / 1000.0  # ms to seconds
+                end_time = sentence.get("end_time", 0) / 1000.0
+                text = sentence.get("text", "")
+
+                if not text.strip():
+                    continue
+
+                # Format timestamps for SRT (HH:MM:SS,mmm)
+                start_srt = format_srt_timestamp(start_time)
+                end_srt = format_srt_timestamp(end_time)
+
+                srt_lines.append(str(subtitle_index))
+                srt_lines.append(f"{start_srt} --> {end_srt}")
+                srt_lines.append(text)
+                srt_lines.append("")
+
+                subtitle_index += 1
+
+    return "\n".join(srt_lines)
+
+
+def format_srt_timestamp(seconds: float) -> str:
+    """Format seconds to SRT timestamp format (HH:MM:SS,mmm)."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int((seconds - int(seconds)) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
 def trim_video_func(input_file: str, output_file: str, start_trim: str, end_trim: str):
@@ -389,6 +601,62 @@ def add_subtitles(
     except subprocess.CalledProcessError:
         logger.error("ffmpeg command failed")
         sys.exit(1)
+
+
+@app.command()
+def transcribe(
+    input_video: str,
+    output_subtitle: Optional[str] = typer.Option(
+        None, help="Output SRT subtitle file"
+    ),
+    language: str = typer.Option(
+        "zh,en", help="Language hints (comma-separated, e.g., 'zh,en')"
+    ),
+    keep_audio: bool = typer.Option(False, help="Keep extracted audio file"),
+):
+    """Transcribe audio from video to text using DashScope ASR."""
+    if not os.path.exists(input_video):
+        logger.error(f"Input video not found: {input_video}")
+        sys.exit(1)
+
+    if not output_subtitle:
+        filename, _ = os.path.splitext(input_video)
+        output_subtitle = f"{filename}.srt"
+
+    logger.info(f"Input video: {input_video}")
+    logger.info(f"Output subtitle: {output_subtitle}")
+
+    # Extract audio
+    temp_audio = f"temp_audio_{random.randint(1000, 9999)}.wav"
+    extract_audio_func(input_video, temp_audio)
+
+    # Transcribe audio
+    language_hints = [lang.strip() for lang in language.split(",")]
+    logger.info(f"Language hints: {language_hints}")
+
+    try:
+        results = transcribe_audio_func(temp_audio, language_hints)
+
+        if not results:
+            logger.error("No transcription results received")
+            sys.exit(1)
+
+        # Generate SRT content
+        srt_content = generate_srt_from_transcription(results)
+
+        if not srt_content.strip():
+            logger.warning("Transcription returned empty results")
+        else:
+            with open(output_subtitle, "w", encoding="utf-8") as f:
+                f.write(srt_content)
+            logger.success(f"Subtitle file saved: {output_subtitle}")
+
+    finally:
+        # Cleanup
+        if not keep_audio and os.path.exists(temp_audio):
+            os.remove(temp_audio)
+        elif keep_audio:
+            logger.info(f"Audio file kept: {temp_audio}")
 
 
 if __name__ == "__main__":
