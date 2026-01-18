@@ -462,7 +462,7 @@ def burn_subtitles_func(
         "Alignment=2"
     )
 
-    vf_filter = f"subtitles={subtitle_file}:force_style='{style}'"
+    vf_filter = f"subtitles={subtitle_file}:force_style='{''.join(style)}'"
 
     cmd = ["ffmpeg", "-i", input_file, "-vf", vf_filter]
 
@@ -783,7 +783,7 @@ def add_subtitles(
         "Alignment=2"
     )
 
-    vf_filter = f"subtitles={subtitle_file}:force_style='{style}'"
+    vf_filter = f"subtitles={subtitle_file}:force_style='{''.join(style)}'"
 
     cmd = ["ffmpeg", "-i", input_video, "-vf", vf_filter]
 
