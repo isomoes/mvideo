@@ -396,6 +396,28 @@ def normalize_audio_func(
     logger.success(f"Audio normalized: {output_file}")
 
 
+def get_video_frame_count(input_file: str) -> int | None:
+    """Get total frame count of a video file."""
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-count_packets",
+        "-show_entries",
+        "stream=nb_read_packets",
+        "-of",
+        "csv=p=0",
+        input_file,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return None
+
+
 def burn_subtitles_func(
     input_file: str,
     subtitle_file: str,
@@ -404,6 +426,11 @@ def burn_subtitles_func(
 ) -> None:
     """Burn subtitles into video."""
     logger.info(f"Burning subtitles into video: {input_file}")
+
+    # Get total frames for progress calculation
+    total_frames = get_video_frame_count(input_file)
+    if total_frames:
+        logger.info(f"Total frames to process: {total_frames}")
 
     style = (
         "FontName=Source Han Sans SC,"
@@ -426,10 +453,47 @@ def burn_subtitles_func(
     else:
         cmd.extend(["-c:v", "libx264", "-preset", "ultrafast", "-crf", "28"])
 
-    cmd.extend(["-c:a", "copy", "-y", output_file, "-loglevel", "warning"])
+    cmd.extend(["-c:a", "copy", "-y", output_file, "-progress", "pipe:1"])
 
     try:
-        subprocess.run(cmd, check=True)
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        last_percent = -1
+        stdout = process.stdout
+        stderr = process.stderr
+        if stdout is None or stderr is None:
+            logger.error("Failed to capture ffmpeg output")
+            sys.exit(1)
+
+        while True:
+            line = stdout.readline()
+            if not line and process.poll() is not None:
+                break
+
+            if line.startswith("frame="):
+                try:
+                    current_frame = int(line.split("=")[1].strip())
+                    if total_frames and total_frames > 0:
+                        percent = int((current_frame / total_frames) * 100)
+                        if percent != last_percent and percent % 10 == 0:
+                            logger.info(
+                                f"Progress: {percent}% ({current_frame}/{total_frames} frames)"
+                            )
+                            last_percent = percent
+                except ValueError:
+                    pass
+
+        return_code = process.wait()
+        if return_code != 0:
+            stderr_output = stderr.read()
+            logger.error(f"FFmpeg failed: {stderr_output}")
+            sys.exit(1)
+
         logger.success(f"Subtitles burned into video: {output_file}")
     except subprocess.CalledProcessError:
         logger.error("Failed to burn subtitles into video")
