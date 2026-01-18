@@ -317,8 +317,17 @@ def format_srt_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
-def trim_video_func(input_file: str, start_trim: str, end_trim: str):
-    """Trim video from start/end (modifies original file in-place)."""
+def trim_video_func(
+    input_file: str, start_trim: str, end_trim: str, output_file: str | None = None
+) -> None:
+    """Trim video from start/end.
+
+    Args:
+        input_file: Path to input video
+        start_trim: Trim from start (HH:MM:SS or seconds)
+        end_trim: Trim from end (HH:MM:SS or seconds)
+        output_file: Output file path (if None, modifies input file in-place for backward compatibility)
+    """
     logger.info(f"Trimming video: {input_file}")
 
     duration = get_video_duration(input_file)
@@ -344,7 +353,12 @@ def trim_video_func(input_file: str, start_trim: str, end_trim: str):
 
     logger.info(f"New duration: {duration_trim} seconds")
 
-    temp_file = f"temp_trim_{random.randint(1000, 9999)}.mp4"
+    # Use provided output file or input file for backward compatibility
+    if output_file is None:
+        output_file = input_file
+        temp_file = f"temp_trim_{random.randint(1000, 9999)}.mp4"
+    else:
+        temp_file = output_file
 
     cmd = [
         "ffmpeg",
@@ -363,10 +377,14 @@ def trim_video_func(input_file: str, start_trim: str, end_trim: str):
     ]
     subprocess.run(cmd, check=True)
 
-    # Replace original file with trimmed version
-    shutil.move(temp_file, input_file)
-
-    logger.success(f"Video trimmed successfully: {input_file}")
+    # If output_file is different from input_file, move temp to output
+    if output_file != input_file:
+        shutil.move(temp_file, output_file)
+        logger.success(f"Video trimmed successfully: {output_file}")
+    else:
+        # Replace original file with trimmed version
+        shutil.move(temp_file, input_file)
+        logger.success(f"Video trimmed successfully: {input_file}")
 
 
 def normalize_audio_func(
@@ -648,8 +666,8 @@ def process(
 
     # Step 1: Trim
     if start_trim != "0" or end_trim != "0":
-        trim_video_func(current_input, start_trim, end_trim)
-        # File is modified in-place, current_input still points to same file
+        trim_video_func(current_input, start_trim, end_trim, temp_trimmed)
+        current_input = temp_trimmed
 
     # Step 2: Normalize
     logger.info("Normalizing video audio...")
