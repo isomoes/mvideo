@@ -488,11 +488,8 @@ def burn_subtitles_func(
             logger.error("Failed to capture ffmpeg output")
             sys.exit(1)
 
-        while True:
-            line = stdout.readline()
-            if not line and process.poll() is not None:
-                break
-
+        # Read progress output line by line
+        for line in iter(stdout.readline, ""):
             if line.startswith("frame="):
                 try:
                     current_frame = int(line.split("=")[1].strip())
@@ -506,6 +503,7 @@ def burn_subtitles_func(
                 except ValueError:
                     pass
 
+        # Wait for process to complete
         return_code = process.wait()
         if return_code != 0:
             stderr_output = stderr.read()
