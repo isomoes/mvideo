@@ -317,6 +317,84 @@ def format_srt_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
+def parse_srt_timestamp(timestamp: str) -> float:
+    """Parse SRT timestamp (HH:MM:SS,mmm) to seconds."""
+    # Handle both comma and period as decimal separator
+    timestamp = timestamp.replace(",", ".")
+    parts = timestamp.split(":")
+    hours = int(parts[0])
+    minutes = int(parts[1])
+    seconds = float(parts[2])
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def adjust_srt_timestamps(srt_file: str, offset_seconds: float) -> None:
+    """Adjust all timestamps in SRT file by subtracting offset_seconds.
+
+    This is needed when trimming video from the start - the SRT timestamps
+    are based on the original video, but need to be shifted to match
+    the trimmed video.
+
+    Args:
+        srt_file: Path to SRT file to modify in-place
+        offset_seconds: Seconds to subtract from all timestamps
+    """
+    if offset_seconds <= 0:
+        return
+
+    logger.info(f"Adjusting SRT timestamps by -{offset_seconds}s")
+
+    with open(srt_file, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Parse SRT into entries (each entry: index, timestamp, text lines)
+    entries = []
+    blocks = content.strip().split("\n\n")
+
+    for block in blocks:
+        lines = block.strip().split("\n")
+        if len(lines) >= 3:
+            # lines[0] = index, lines[1] = timestamp, lines[2:] = text
+            timestamp_line = lines[1]
+            if " --> " in timestamp_line:
+                parts = timestamp_line.split(" --> ")
+                if len(parts) == 2:
+                    start_time = parse_srt_timestamp(parts[0].strip())
+                    end_time = parse_srt_timestamp(parts[1].strip())
+                    text = "\n".join(lines[2:])
+                    entries.append((start_time, end_time, text))
+
+    # Adjust timestamps and filter out entries before trim point
+    adjusted_entries = []
+    for start_time, end_time, text in entries:
+        new_start = start_time - offset_seconds
+        new_end = end_time - offset_seconds
+
+        # Skip subtitles that end before or at the trim point
+        if new_end <= 0:
+            continue
+
+        # Clamp start to 0 if it's negative
+        new_start = max(0, new_start)
+        adjusted_entries.append((new_start, new_end, text))
+
+    # Rebuild SRT content with new index numbers
+    srt_lines = []
+    for idx, (start_time, end_time, text) in enumerate(adjusted_entries, 1):
+        srt_lines.append(str(idx))
+        srt_lines.append(
+            f"{format_srt_timestamp(start_time)} --> {format_srt_timestamp(end_time)}"
+        )
+        srt_lines.append(text)
+        srt_lines.append("")
+
+    # Write back
+    with open(srt_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(srt_lines))
+
+    logger.success(f"SRT timestamps adjusted: {srt_file}")
+
+
 def trim_video_func(
     input_file: str, start_trim: str, end_trim: str, output_file: str | None = None
 ) -> None:
@@ -441,14 +519,25 @@ def burn_subtitles_func(
     subtitle_file: str,
     output_file: str,
     gpu: bool = True,
+    start_seconds: float = 0,
+    duration: float | None = None,
 ) -> None:
-    """Burn subtitles into video."""
-    logger.info(f"Burning subtitles into video: {input_file}")
+    """Burn subtitles into video with optional trim.
 
-    # Get total frames for progress calculation
-    total_frames = get_video_frame_count(input_file)
-    if total_frames:
-        logger.info(f"Total frames to process: {total_frames}")
+    Combining trim and burn in one ffmpeg pass avoids keyframe alignment issues
+    that occur when using stream copy (-c copy) for trimming separately.
+
+    Args:
+        input_file: Path to input video
+        subtitle_file: Path to SRT subtitle file
+        output_file: Path to output video
+        gpu: Use GPU acceleration (h264_nvenc)
+        start_seconds: Start time in seconds (for trim)
+        duration: Duration in seconds (for trim), None means until end
+    """
+    logger.info(f"Burning subtitles into video: {input_file}")
+    if start_seconds > 0 or duration is not None:
+        logger.info(f"With trim: start={start_seconds}s, duration={duration}s")
 
     style = (
         "FontName=Source Han Sans SC,"
@@ -464,52 +553,30 @@ def burn_subtitles_func(
 
     vf_filter = f"subtitles={subtitle_file}:force_style='{''.join(style)}'"
 
-    cmd = ["ffmpeg", "-i", input_file, "-vf", vf_filter]
+    # Build ffmpeg command
+    # -fflags +genpts regenerates timestamps to fix keyframe alignment issues
+    # from stream-copy trimming, ensuring video plays correctly on YouTube
+    cmd = ["ffmpeg", "-fflags", "+genpts"]
+
+    # Add trim start time before input (fast seek)
+    if start_seconds > 0:
+        cmd.extend(["-ss", str(start_seconds)])
+
+    cmd.extend(["-i", input_file, "-vf", vf_filter])
+
+    # Add duration if specified
+    if duration is not None:
+        cmd.extend(["-t", str(duration)])
 
     if gpu:
         cmd.extend(["-c:v", "h264_nvenc", "-preset", "p1", "-cq", "28"])
     else:
         cmd.extend(["-c:v", "libx264", "-preset", "ultrafast", "-crf", "28"])
 
-    cmd.extend(["-c:a", "copy", "-y", output_file, "-progress", "pipe:1"])
+    cmd.extend(["-c:a", "aac", "-b:a", "192k", "-y", output_file])
 
     try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-
-        last_percent = -1
-        stdout = process.stdout
-        stderr = process.stderr
-        if stdout is None or stderr is None:
-            logger.error("Failed to capture ffmpeg output")
-            sys.exit(1)
-
-        # Read progress output line by line
-        for line in iter(stdout.readline, ""):
-            if line.startswith("frame="):
-                try:
-                    current_frame = int(line.split("=")[1].strip())
-                    if total_frames and total_frames > 0:
-                        percent = int((current_frame / total_frames) * 100)
-                        if percent != last_percent and percent % 10 == 0:
-                            logger.info(
-                                f"Progress: {percent}% ({current_frame}/{total_frames} frames)"
-                            )
-                            last_percent = percent
-                except ValueError:
-                    pass
-
-        # Wait for process to complete
-        return_code = process.wait()
-        if return_code != 0:
-            stderr_output = stderr.read()
-            logger.error(f"FFmpeg failed: {stderr_output}")
-            sys.exit(1)
-
+        subprocess.run(cmd, check=True)
         logger.success(f"Subtitles burned into video: {output_file}")
     except subprocess.CalledProcessError:
         logger.error("Failed to burn subtitles into video")
@@ -662,8 +729,18 @@ def process(
 
     current_input = input_video
 
-    # Step 1: Trim
-    if start_trim != "0" or end_trim != "0":
+    # Calculate trim parameters for later use
+    start_seconds = parse_time(start_trim)
+    end_seconds_trim = parse_time(end_trim)
+    video_duration = get_video_duration(input_video)
+    trim_duration = (
+        video_duration - start_seconds - end_seconds_trim
+        if (start_seconds > 0 or end_seconds_trim > 0)
+        else None
+    )
+
+    # Step 1: Trim (only if NOT burning subtitles - otherwise combine with burn step)
+    if not burn_srt and (start_trim != "0" or end_trim != "0"):
         trim_video_func(current_input, start_trim, end_trim, temp_trimmed)
         current_input = temp_trimmed
 
@@ -723,9 +800,22 @@ def process(
             if os.path.exists(temp_audio):
                 os.remove(temp_audio)
 
-    # Step 5: Burn subtitles into final video
+    # Step 5: Burn subtitles into final video (with trim if needed)
+    # Combining trim + burn in one ffmpeg pass avoids keyframe alignment issues
     if burn_srt and srt_file and os.path.exists(srt_file):
-        burn_subtitles_func(temp_mixed, srt_file, output_video, gpu)
+        # Adjust SRT timestamps when trimming from start
+        # SRT was generated from original video, need to shift timestamps
+        if start_seconds > 0:
+            adjust_srt_timestamps(srt_file, start_seconds)
+
+        burn_subtitles_func(
+            temp_mixed,
+            srt_file,
+            output_video,
+            gpu,
+            start_seconds=start_seconds,
+            duration=trim_duration,
+        )
     elif burn_srt:
         logger.warning("No SRT file available, skipping subtitle burning")
         shutil.copy(temp_mixed, output_video)
