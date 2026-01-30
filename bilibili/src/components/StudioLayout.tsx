@@ -1,8 +1,8 @@
 import React, { useMemo } from "react";
 import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
+  Separator as ResizableHandle,
+  Panel as ResizablePanel,
+  Group as ResizablePanelGroup,
 } from "react-resizable-panels";
 import { useUIStore } from "../services/ui-store";
 import { Panel } from "./Panel";
@@ -50,9 +50,9 @@ export const StudioLayout = ({ renderPanelContent }: StudioLayoutProps) => {
 
   return (
     <div className="h-[calc(100vh-100px)] w-full">
-      <ResizablePanelGroup direction="vertical">
+      <ResizablePanelGroup orientation="vertical">
         <ResizablePanel defaultSize={70}>
-          <ResizablePanelGroup direction="horizontal">
+          <ResizablePanelGroup orientation="horizontal">
             {dockedPanels.left.length > 0 && (
               <>
                 <ResizablePanel defaultSize={20} minSize={15}>
