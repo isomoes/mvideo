@@ -11,7 +11,7 @@ const ButtonForward: React.ForwardRefRenderFunction<
     loading?: boolean;
     secondary?: boolean;
   }
-> = ({ onClick, disabled, children, loading, secondary }, ref) => {
+> = ({ onClick, disabled, children, loading }, ref) => {
   return (
     <button
       ref={ref}
