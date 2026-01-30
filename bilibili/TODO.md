@@ -64,10 +64,10 @@ Based on [ARCH.md](./ARCH.md)
 
 ### 3.1 Base Compositions
 
-- [ ] Create `IntroComposition` template
-- [ ] Create `MainComposition` (trimmed OBS with overlay support)
-- [ ] Create `OutroComposition` template
-- [ ] Create `FinalComposition` (stitches intro + main + outro)
+- [x] Create `IntroComposition` template
+- [x] Create `MainComposition` (trimmed OBS with overlay support)
+- [x] Create `OutroComposition` template
+- [x] Create `FinalComposition` (stitches intro + main + outro)
 
 ### 3.2 Composition Props & Configuration
 
