@@ -69,6 +69,23 @@ export type ProxyOptions = {
   format?: string;
 };
 
+export type WaveformOptions = {
+  inputPath: string;
+  outputPath: string;
+  sampleRate?: number;
+  channels?: number;
+  format?: string;
+};
+
+export type ThumbnailOptions = {
+  inputPath: string;
+  outputDir: string;
+  count: number;
+  width?: number;
+  height?: number;
+  filename?: string;
+};
+
 export type CommandHandlers = {
   onStart?: (command: string) => void;
   onProgress?: (progress: FfmpegProgress) => void;
@@ -144,6 +161,52 @@ export const buildProxyCommand = (options: ProxyOptions): FfmpegCommand => {
   }
 
   return command;
+};
+
+export const buildWaveformCommand = (
+  options: WaveformOptions,
+): FfmpegCommand => {
+  const sampleRate = options.sampleRate ?? 44100;
+  const channels = options.channels ?? 1;
+
+  const command = ffmpeg(options.inputPath)
+    .noVideo()
+    .audioChannels(channels)
+    .audioFrequency(sampleRate)
+    .output(options.outputPath);
+
+  if (options.format) {
+    command.format(options.format);
+  }
+
+  return command;
+};
+
+export const generateThumbnails = (options: ThumbnailOptions): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const size =
+      options.width || options.height
+        ? `${options.width ?? "?"}x${options.height ?? "?"}`
+        : undefined;
+
+    ffmpeg(options.inputPath)
+      .on("error", (error, stdout, stderr) => {
+        reject(
+          new FfmpegCommandError("FFmpeg thumbnail generation failed", {
+            stdout,
+            stderr,
+            cause: error,
+          }),
+        );
+      })
+      .on("end", () => resolve())
+      .screenshots({
+        count: options.count,
+        filename: options.filename ?? "thumb-%03d.jpg",
+        folder: options.outputDir,
+        size,
+      });
+  });
 };
 
 export const runFfmpegCommand = (

@@ -47,18 +47,18 @@ Based on [ARCH.md](./ARCH.md)
 
 ### 2.3 Media Processing (Requires 2.1 + 2.2)
 
-- [ ] Implement video trimming service
-- [ ] Implement audio normalization (EBU R128 / LUFS target)
-- [ ] Generate preview proxies (lower resolution for smooth playback)
-- [ ] Generate thumbnails for timeline
-- [ ] Generate waveform data for audio visualization
+- [x] Implement video trimming service
+- [x] Implement audio normalization (EBU R128 / LUFS target)
+- [x] Generate preview proxies (lower resolution for smooth playback)
+- [x] Generate thumbnails for timeline
+- [x] Generate waveform data for audio visualization
 
 ### 2.4 Asset Store (Can start after 2.1)
 
-- [ ] Design artifact storage structure (source, trimmed, proxy, waveform)
-- [ ] Implement asset CRUD operations
-- [ ] Add derived asset linking (source -> trimmed -> proxy)
-- [ ] Implement media cache for reusing derived assets
+- [x] Design artifact storage structure (source, trimmed, proxy, waveform)
+- [x] Implement asset CRUD operations
+- [x] Add derived asset linking (source -> trimmed -> proxy)
+- [x] Implement media cache for reusing derived assets
 
 ## Phase 3: Remotion Compositions (Can start parallel to Phase 2)
 

@@ -16,6 +16,21 @@ export type MediaMetadata = {
   audioTracks: AudioTrackInfo[];
 };
 
+export type DerivedAssetRecord = {
+  trimmedVideoPath?: string;
+  normalizedAudioPath?: string;
+  proxyVideoPath?: string;
+  waveformPath?: string;
+  thumbnailsDir?: string;
+  thumbnailPaths?: string[];
+  cacheKey?: string;
+  links?: {
+    sourcePath?: string;
+    trimmedVideoPath?: string;
+    proxyVideoPath?: string;
+  };
+};
+
 export type AssetRecord = {
   id: string;
   originalName: string;
@@ -23,6 +38,7 @@ export type AssetRecord = {
   sizeBytes: number;
   createdAt: string;
   metadata: MediaMetadata;
+  derived?: DerivedAssetRecord;
 };
 
 const defaultStorageRoot = path.join(process.cwd(), "storage");
@@ -37,6 +53,30 @@ export const getAssetDir = (assetId: string): string => {
 
 export const getAssetSourceDir = (assetId: string): string => {
   return path.join(getAssetDir(assetId), "source");
+};
+
+export const getAssetDerivedDir = (assetId: string): string => {
+  return path.join(getAssetDir(assetId), "derived");
+};
+
+export const getAssetDerivedPath = (assetId: string, filename: string): string => {
+  return path.join(getAssetDerivedDir(assetId), filename);
+};
+
+export const getAssetRecordPath = (assetId: string): string => {
+  return path.join(getAssetDir(assetId), "asset.json");
+};
+
+export const getCacheRoot = (): string => {
+  return path.join(getStorageRoot(), "cache");
+};
+
+export const getCacheEntryDir = (cacheKey: string): string => {
+  return path.join(getCacheRoot(), cacheKey);
+};
+
+export const getCacheEntryPath = (cacheKey: string, filename: string): string => {
+  return path.join(getCacheEntryDir(cacheKey), filename);
 };
 
 export const ensureDir = async (dirPath: string): Promise<void> => {
@@ -58,6 +98,72 @@ export const writeAssetSource = async (
 export const writeAssetRecord = async (record: AssetRecord): Promise<void> => {
   const assetDir = getAssetDir(record.id);
   await ensureDir(assetDir);
-  const recordPath = path.join(assetDir, "asset.json");
+  const recordPath = getAssetRecordPath(record.id);
   await fs.writeFile(recordPath, JSON.stringify(record, null, 2));
+};
+
+export const readAssetRecord = async (
+  assetId: string,
+): Promise<AssetRecord | null> => {
+  try {
+    const recordPath = getAssetRecordPath(assetId);
+    const contents = await fs.readFile(recordPath, "utf-8");
+    return JSON.parse(contents) as AssetRecord;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+};
+
+export const listAssetRecords = async (): Promise<AssetRecord[]> => {
+  const assetsRoot = path.join(getStorageRoot(), "assets");
+
+  try {
+    const entries = await fs.readdir(assetsRoot, { withFileTypes: true });
+    const records = await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map(async (entry) => readAssetRecord(entry.name)),
+    );
+
+    return records
+      .filter((record): record is AssetRecord => Boolean(record))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+};
+
+export const updateAssetRecord = async (
+  assetId: string,
+  update: Partial<AssetRecord>,
+): Promise<AssetRecord> => {
+  const existing = await readAssetRecord(assetId);
+  if (!existing) {
+    throw new Error(`Asset not found: ${assetId}`);
+  }
+
+  const next: AssetRecord = {
+    ...existing,
+    ...update,
+    id: existing.id,
+    sourcePath: existing.sourcePath,
+    sizeBytes: existing.sizeBytes,
+    createdAt: existing.createdAt,
+  };
+
+  await writeAssetRecord(next);
+  return next;
+};
+
+export const deleteAsset = async (assetId: string): Promise<void> => {
+  const assetDir = getAssetDir(assetId);
+  await fs.rm(assetDir, { recursive: true, force: true });
 };
