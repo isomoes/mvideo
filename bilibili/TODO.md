@@ -22,10 +22,10 @@ Based on [ARCH.md](./ARCH.md)
 
 ### 1.2 Core Data Models (Can start after 1.1)
 
-- [ ] Define TypeScript types for Project, Track, Clip, Asset
-- [ ] Create Zod schemas for validation
-- [ ] Set up project state management (Zustand or similar)
-- [ ] Implement project serialization/deserialization (JSON)
+- [x] Define TypeScript types for Project, Track, Clip, Asset
+- [x] Create Zod schemas for validation
+- [x] Set up project state management (Zustand or similar)
+- [x] Implement project serialization/deserialization (JSON)
 
 ## Phase 2: Media Pipeline (Parallel tracks available)
 
