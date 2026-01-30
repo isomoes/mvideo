@@ -1,5 +1,10 @@
 import "../../styles/global.css";
 import { Metadata, Viewport } from "next";
+import { ensureFfmpegAvailable } from "../server/ffmpeg";
+
+ensureFfmpegAvailable().catch((error) => {
+  console.error("[ffmpeg] availability check failed", error);
+});
 
 export const metadata: Metadata = {
   title: "Remotion and Next.js",

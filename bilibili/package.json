@@ -8,6 +8,8 @@
     "url": "https://mohitya.dev"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "1.1.0",
+    "@ffprobe-installer/ffprobe": "2.1.2",
     "@remotion/bundler": "4.0.414",
     "@remotion/cli": "4.0.414",
     "@remotion/google-fonts": "4.0.414",
@@ -17,6 +19,7 @@
     "@remotion/shapes": "4.0.414",
     "@remotion/tailwind-v4": "4.0.414",
     "clsx": "2.1.1",
+    "fluent-ffmpeg": "2.1.3",
     "next": "16.1.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -29,6 +32,7 @@
     "@remotion/eslint-plugin": "4.0.414",
     "@eslint/eslintrc": "3.1.0",
     "@eslint/js": "9.38.0",
+    "@types/fluent-ffmpeg": "2.1.24",
     "@types/node": "20.12.14",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",

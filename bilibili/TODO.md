@@ -40,10 +40,10 @@ Based on [ARCH.md](./ARCH.md)
 
 **2.2 FFmpeg Integration:**
 
-- [ ] Set up FFmpeg bindings (fluent-ffmpeg or similar)
-- [ ] Create FFmpeg command builders for common operations
-- [ ] Implement error handling and progress reporting
-- [ ] Add FFmpeg availability check on startup
+- [x] Set up FFmpeg bindings (fluent-ffmpeg or similar)
+- [x] Create FFmpeg command builders for common operations
+- [x] Implement error handling and progress reporting
+- [x] Add FFmpeg availability check on startup
 
 ### 2.3 Media Processing (Requires 2.1 + 2.2)
 
