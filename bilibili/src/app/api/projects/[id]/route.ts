@@ -5,6 +5,7 @@ import {
   deleteProject,
   readProject,
   writeProject,
+  updateProject,
 } from "../../../../server/project-store";
 
 export const runtime = "nodejs";
@@ -53,6 +54,24 @@ export const PUT = async (
     return NextResponse.json({ type: "success", data: next });
   } catch (error) {
     logger.reportError(error as Error, { action: "save-project" });
+    return NextResponse.json(
+      { type: "error", message: (error as Error).message },
+      { status: 500 },
+    );
+  }
+};
+
+export const PATCH = async (
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) => {
+  try {
+    const { id } = await params;
+    const payload = ProjectSchema.partial().parse(await req.json());
+    const updated = await updateProject(id, payload);
+    return NextResponse.json({ type: "success", data: updated });
+  } catch (error) {
+    logger.reportError(error as Error, { action: "modify-project" });
     return NextResponse.json(
       { type: "error", message: (error as Error).message },
       { status: 500 },

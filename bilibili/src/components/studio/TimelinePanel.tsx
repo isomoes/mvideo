@@ -38,7 +38,7 @@ export const TimelinePanel = ({
   onClipSelect,
   onZoomChange,
 }: TimelinePanelProps) => {
-  const { project, updateClip, addAsset, addTrack, addClip } = useProjectStore();
+  const { project, updateClip, updateProject, addAsset, addTrack, addClip } = useProjectStore();
 
   const handleUpdateClip = (clipId: string, partial: any) => {
     updateClip(clipId, partial);
@@ -99,12 +99,29 @@ export const TimelinePanel = ({
         addAsset(asset);
       }
 
+      // If this is the first video being added to the timeline, update project dimensions
       const trackKind: "video" | "audio" | "overlay" =
         payload.kind === "audio"
           ? "audio"
           : payload.kind === "video"
             ? "video"
             : "overlay";
+
+      const hasExistingVideoTracks = project.tracks.some(
+        (track) => track.kind === "video" && track.clips.length > 0
+      );
+
+      if (
+        trackKind === "video" &&
+        !hasExistingVideoTracks &&
+        payload.record.metadata.width &&
+        payload.record.metadata.height
+      ) {
+        updateProject({
+          width: payload.record.metadata.width,
+          height: payload.record.metadata.height,
+        });
+      }
 
       let track = project.tracks.find((value) => value.kind === trackKind);
       if (!track) {
@@ -133,7 +150,7 @@ export const TimelinePanel = ({
         trimStartFrame: 0,
       });
     },
-    [addAsset, addClip, addTrack, currentFrame, project.assets, project.durationInFrames, project.fps, project.tracks]
+    [addAsset, addClip, addTrack, updateProject, currentFrame, project.assets, project.durationInFrames, project.fps, project.tracks]
   );
 
   return (

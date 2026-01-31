@@ -64,3 +64,83 @@ export const deleteProject = async (projectId: string): Promise<void> => {
   const projectDir = getProjectDir(projectId);
   await fs.rm(projectDir, { recursive: true, force: true });
 };
+
+export const updateProject = async (
+  projectId: string,
+  update: Partial<Project>,
+): Promise<Project> => {
+  const existing = await readProject(projectId);
+  if (!existing) {
+    throw new Error(`Project not found: ${projectId}`);
+  }
+
+  const now = new Date().toISOString();
+  const next: Project = {
+    ...existing,
+    ...update,
+    id: existing.id,
+    schemaVersion: existing.schemaVersion,
+    createdAt: existing.createdAt,
+    updatedAt: now,
+  };
+
+  await writeProject(next);
+  return next;
+};
+
+export const getProjectFilesDir = (projectId: string): string => {
+  return path.join(getProjectDir(projectId), "files");
+};
+
+export const writeProjectFile = async (
+  projectId: string,
+  filename: string,
+  contents: Buffer,
+): Promise<string> => {
+  const filesDir = getProjectFilesDir(projectId);
+  await ensureDir(filesDir);
+  const filePath = path.join(filesDir, filename);
+  await fs.writeFile(filePath, contents);
+  return filePath;
+};
+
+export const readProjectFile = async (
+  projectId: string,
+  filename: string,
+): Promise<Buffer | null> => {
+  try {
+    const filePath = path.join(getProjectFilesDir(projectId), filename);
+    return await fs.readFile(filePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+};
+
+export const listProjectFiles = async (projectId: string): Promise<string[]> => {
+  const filesDir = getProjectFilesDir(projectId);
+
+  try {
+    const entries = await fs.readdir(filesDir, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+};
+
+export const deleteProjectFile = async (
+  projectId: string,
+  filename: string,
+): Promise<void> => {
+  const filePath = path.join(getProjectFilesDir(projectId), filename);
+  await fs.rm(filePath, { force: true });
+};

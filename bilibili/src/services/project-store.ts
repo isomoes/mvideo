@@ -7,8 +7,13 @@ type ProjectState = {
   project: Project;
   setProject: (project: Project) => void;
   updateProject: (partial: Partial<Project>) => void;
+  modifyProject: (projectId: string, partial: Partial<Project>) => Promise<Project>;
   addAsset: (asset: Asset) => void;
+  removeAsset: (assetId: string) => void;
+  updateAsset: (assetId: string, partial: Partial<Asset>) => void;
   addTrack: (track: Track) => void;
+  removeTrack: (trackId: string) => void;
+  updateTrack: (trackId: string, partial: Partial<Track>) => void;
   addClip: (trackId: string, clip: Clip) => void;
   updateClip: (clipId: string, partial: Partial<Clip>) => void;
   removeClip: (clipId: string) => void;
@@ -37,6 +42,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         ...partial,
       }),
     })),
+  modifyProject: async (projectId, partial) => {
+    const response = await fetch(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(partial),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.type !== "success") {
+      throw new Error(payload.message ?? "Failed to modify project.");
+    }
+    set({ project: payload.data });
+    return payload.data;
+  },
   addAsset: (asset) =>
     set((state) => ({
       project: touchProject({
@@ -44,11 +62,55 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         assets: [...state.project.assets, asset],
       }),
     })),
+  removeAsset: (assetId) =>
+    set((state) => ({
+      project: touchProject({
+        ...state.project,
+        assets: state.project.assets.filter((asset) => asset.id !== assetId),
+      }),
+    })),
+  updateAsset: (assetId, partial) =>
+    set((state) => ({
+      project: touchProject({
+        ...state.project,
+        assets: state.project.assets.map((asset) => {
+          if (asset.id !== assetId) {
+            return asset;
+          }
+          return {
+            ...asset,
+            ...partial,
+          };
+        }),
+      }),
+    })),
   addTrack: (track) =>
     set((state) => ({
       project: touchProject({
         ...state.project,
         tracks: [...state.project.tracks, track],
+      }),
+    })),
+  removeTrack: (trackId) =>
+    set((state) => ({
+      project: touchProject({
+        ...state.project,
+        tracks: state.project.tracks.filter((track) => track.id !== trackId),
+      }),
+    })),
+  updateTrack: (trackId, partial) =>
+    set((state) => ({
+      project: touchProject({
+        ...state.project,
+        tracks: state.project.tracks.map((track) => {
+          if (track.id !== trackId) {
+            return track;
+          }
+          return {
+            ...track,
+            ...partial,
+          };
+        }),
       }),
     })),
   addClip: (trackId, clip) =>
