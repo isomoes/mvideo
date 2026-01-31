@@ -292,6 +292,7 @@ const Home: NextPage = () => {
         }
         resourcesPanel={
           <ResourcesPanel
+            projectId={project.id}
             onAssetSelect={(asset) => console.log("Asset selected:", asset)}
             onAssetDragStart={(asset) => console.log("Dragging asset:", asset)}
           />

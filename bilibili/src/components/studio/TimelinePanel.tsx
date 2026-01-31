@@ -89,7 +89,7 @@ export const TimelinePanel = ({
       const asset: Asset = {
         id: payload.record.id,
         kind: payload.kind,
-        src: `/api/assets/${payload.record.id}/source`,
+        src: `/api/projects/${project.id}/assets/${payload.record.id}/source`,
         name: payload.record.originalName,
         durationInFrames: assetDurationInFrames,
         meta: Object.keys(meta).length ? meta : undefined,

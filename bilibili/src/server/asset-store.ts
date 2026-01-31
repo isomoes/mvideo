@@ -32,6 +32,7 @@ export type DerivedAssetRecord = {
 
 export type AssetRecord = {
   id: string;
+  projectId: string;
   originalName: string;
   sourcePath: string;
   sizeBytes: number;
@@ -46,24 +47,28 @@ export const getStorageRoot = (): string => {
   return process.env.ASSET_STORAGE_ROOT ?? defaultStorageRoot;
 };
 
-export const getAssetDir = (assetId: string): string => {
-  return path.join(getStorageRoot(), "assets", assetId);
+export const getProjectAssetsDir = (projectId: string): string => {
+  return path.join(getStorageRoot(), "projects", projectId, "assets");
 };
 
-export const getAssetSourceDir = (assetId: string): string => {
-  return path.join(getAssetDir(assetId), "source");
+export const getAssetDir = (projectId: string, assetId: string): string => {
+  return path.join(getProjectAssetsDir(projectId), assetId);
 };
 
-export const getAssetDerivedDir = (assetId: string): string => {
-  return path.join(getAssetDir(assetId), "derived");
+export const getAssetSourceDir = (projectId: string, assetId: string): string => {
+  return path.join(getAssetDir(projectId, assetId), "source");
 };
 
-export const getAssetDerivedPath = (assetId: string, filename: string): string => {
-  return path.join(getAssetDerivedDir(assetId), filename);
+export const getAssetDerivedDir = (projectId: string, assetId: string): string => {
+  return path.join(getAssetDir(projectId, assetId), "derived");
 };
 
-export const getAssetRecordPath = (assetId: string): string => {
-  return path.join(getAssetDir(assetId), "asset.json");
+export const getAssetDerivedPath = (projectId: string, assetId: string, filename: string): string => {
+  return path.join(getAssetDerivedDir(projectId, assetId), filename);
+};
+
+export const getAssetRecordPath = (projectId: string, assetId: string): string => {
+  return path.join(getAssetDir(projectId, assetId), "asset.json");
 };
 
 export const ensureDir = async (dirPath: string): Promise<void> => {
@@ -71,11 +76,12 @@ export const ensureDir = async (dirPath: string): Promise<void> => {
 };
 
 export const writeAssetSource = async (
+  projectId: string,
   assetId: string,
   filename: string,
   contents: Buffer,
 ): Promise<string> => {
-  const sourceDir = getAssetSourceDir(assetId);
+  const sourceDir = getAssetSourceDir(projectId, assetId);
   await ensureDir(sourceDir);
   const sourcePath = path.join(sourceDir, filename);
   await fs.writeFile(sourcePath, contents);
@@ -83,17 +89,18 @@ export const writeAssetSource = async (
 };
 
 export const writeAssetRecord = async (record: AssetRecord): Promise<void> => {
-  const assetDir = getAssetDir(record.id);
+  const assetDir = getAssetDir(record.projectId, record.id);
   await ensureDir(assetDir);
-  const recordPath = getAssetRecordPath(record.id);
+  const recordPath = getAssetRecordPath(record.projectId, record.id);
   await fs.writeFile(recordPath, JSON.stringify(record, null, 2));
 };
 
 export const readAssetRecord = async (
+  projectId: string,
   assetId: string,
 ): Promise<AssetRecord | null> => {
   try {
-    const recordPath = getAssetRecordPath(assetId);
+    const recordPath = getAssetRecordPath(projectId, assetId);
     const contents = await fs.readFile(recordPath, "utf-8");
     return JSON.parse(contents) as AssetRecord;
   } catch (error) {
@@ -105,15 +112,15 @@ export const readAssetRecord = async (
   }
 };
 
-export const listAssetRecords = async (): Promise<AssetRecord[]> => {
-  const assetsRoot = path.join(getStorageRoot(), "assets");
+export const listAssetRecords = async (projectId: string): Promise<AssetRecord[]> => {
+  const assetsRoot = getProjectAssetsDir(projectId);
 
   try {
     const entries = await fs.readdir(assetsRoot, { withFileTypes: true });
     const records = await Promise.all(
       entries
         .filter((entry) => entry.isDirectory())
-        .map(async (entry) => readAssetRecord(entry.name)),
+        .map(async (entry) => readAssetRecord(projectId, entry.name)),
     );
 
     return records
@@ -129,10 +136,11 @@ export const listAssetRecords = async (): Promise<AssetRecord[]> => {
 };
 
 export const updateAssetRecord = async (
+  projectId: string,
   assetId: string,
   update: Partial<AssetRecord>,
 ): Promise<AssetRecord> => {
-  const existing = await readAssetRecord(assetId);
+  const existing = await readAssetRecord(projectId, assetId);
   if (!existing) {
     throw new Error(`Asset not found: ${assetId}`);
   }
@@ -141,6 +149,7 @@ export const updateAssetRecord = async (
     ...existing,
     ...update,
     id: existing.id,
+    projectId: existing.projectId,
     sourcePath: existing.sourcePath,
     sizeBytes: existing.sizeBytes,
     createdAt: existing.createdAt,
@@ -150,7 +159,7 @@ export const updateAssetRecord = async (
   return next;
 };
 
-export const deleteAsset = async (assetId: string): Promise<void> => {
-  const assetDir = getAssetDir(assetId);
+export const deleteAsset = async (projectId: string, assetId: string): Promise<void> => {
+  const assetDir = getAssetDir(projectId, assetId);
   await fs.rm(assetDir, { recursive: true, force: true });
 };

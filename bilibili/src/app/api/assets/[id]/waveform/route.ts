@@ -1,5 +1,4 @@
 import { promises as fs } from "fs";
-import { promises as fs } from "fs";
 import { NextResponse } from "next/server";
 import { readAssetRecord } from "../../../../../server/asset-store";
 import { logger } from "../../../../../helpers/logger";

@@ -155,7 +155,7 @@ const createWaveformData = async (options: {
 const processDerivedAssets = async (
   record: AssetRecord,
 ): Promise<DerivedAssetRecord> => {
-  const derivedDir = getAssetDerivedDir(record.id);
+  const derivedDir = getAssetDerivedDir(record.projectId, record.id);
   await ensureDir(derivedDir);
 
   const waveformPath = path.join(derivedDir, "waveform.json");
@@ -198,16 +198,20 @@ const processDerivedAssets = async (
   };
 };
 
-export const ingestUploadedFile = async (file: File): Promise<AssetRecord> => {
+export const ingestUploadedFile = async (
+  projectId: string,
+  file: File,
+): Promise<AssetRecord> => {
   return await logger.trackDuration("ingest-uploaded-file", async () => {
     const assetId = randomUUID();
     const originalName = sanitizeFilename(file.name || "source");
     const buffer = Buffer.from(await file.arrayBuffer());
-    const sourcePath = await writeAssetSource(assetId, originalName, buffer);
+    const sourcePath = await writeAssetSource(projectId, assetId, originalName, buffer);
     const metadata = await extractMetadata(sourcePath);
 
     const record: AssetRecord = {
       id: assetId,
+      projectId,
       originalName,
       sourcePath,
       sizeBytes: buffer.byteLength,
@@ -221,5 +225,5 @@ export const ingestUploadedFile = async (file: File): Promise<AssetRecord> => {
 
     await writeAssetRecord(updatedRecord);
     return updatedRecord;
-  }, { fileName: file.name });
+  }, { fileName: file.name, projectId });
 };

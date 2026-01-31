@@ -89,6 +89,7 @@ type DerivedAssetRecord = {
 
 type AssetRecord = {
   id: string;
+  projectId: string;
   originalName: string;
   sourcePath: string;
   sizeBytes: number;
@@ -210,24 +211,25 @@ const formatBytes = (bytes: number) => {
   return `${value.toFixed(precision)} ${units[unitIndex]}`;
 };
 
-const buildThumbnailUrl = (record: AssetRecord, kind: AssetType) => {
+const buildThumbnailUrl = (projectId: string, record: AssetRecord, kind: AssetType) => {
   if (record.derived?.thumbnailPaths?.length) {
-    return `/api/assets/${record.id}/thumbnails/0`;
+    return `/api/projects/${projectId}/assets/${record.id}/thumbnails/0`;
   }
 
   if (kind === "image") {
-    return `/api/assets/${record.id}/source`;
+    return `/api/projects/${projectId}/assets/${record.id}/source`;
   }
 
   return undefined;
 };
 
 interface ResourcesPanelProps {
+  projectId: string;
   onAssetSelect?: (asset: ResourceAsset) => void;
   onAssetDragStart?: (asset: ResourceAsset) => void;
 }
 
-export const ResourcesPanel = ({ onAssetSelect, onAssetDragStart }: ResourcesPanelProps) => {
+export const ResourcesPanel = ({ projectId, onAssetSelect, onAssetDragStart }: ResourcesPanelProps) => {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(["video", "audio"])
   );
@@ -244,7 +246,7 @@ export const ResourcesPanel = ({ onAssetSelect, onAssetDragStart }: ResourcesPan
     setErrorMessage(null);
 
     try {
-      const response = await fetch("/api/assets");
+      const response = await fetch(`/api/projects/${projectId}/assets`);
       const payload = await response.json();
 
       if (!response.ok || payload.type !== "success") {
@@ -257,14 +259,14 @@ export const ResourcesPanel = ({ onAssetSelect, onAssetDragStart }: ResourcesPan
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   const deleteAsset = useCallback(
     async (assetId: string) => {
       setErrorMessage(null);
 
       try {
-        const response = await fetch(`/api/assets/${assetId}`, {
+        const response = await fetch(`/api/projects/${projectId}/assets/${assetId}`, {
           method: "DELETE",
         });
         const payload = await response.json();
@@ -279,7 +281,7 @@ export const ResourcesPanel = ({ onAssetSelect, onAssetDragStart }: ResourcesPan
         setErrorMessage((error as Error).message);
       }
     },
-    []
+    [projectId]
   );
 
   useEffect(() => {
@@ -305,7 +307,7 @@ export const ResourcesPanel = ({ onAssetSelect, onAssetDragStart }: ResourcesPan
           const formData = new FormData();
           formData.append("file", file);
 
-          const response = await fetch("/api/ingestion/import", {
+          const response = await fetch(`/api/projects/${projectId}/assets/import`, {
             method: "POST",
             body: formData,
           });
@@ -324,7 +326,7 @@ export const ResourcesPanel = ({ onAssetSelect, onAssetDragStart }: ResourcesPan
         event.target.value = "";
       }
     },
-    [loadAssets]
+    [loadAssets, projectId]
   );
 
   const toggleCategory = (categoryId: string) => {
@@ -365,11 +367,11 @@ export const ResourcesPanel = ({ onAssetSelect, onAssetDragStart }: ResourcesPan
         kind,
         durationLabel: formatDuration(record.metadata.durationSeconds),
         sizeLabel: formatBytes(record.sizeBytes),
-        thumbnailUrl: buildThumbnailUrl(record, kind),
+        thumbnailUrl: buildThumbnailUrl(projectId, record, kind),
         record,
       };
     });
-  }, [assetRecords]);
+  }, [assetRecords, projectId]);
 
   const categories = useMemo<AssetCategory[]>(() => {
     return categoryDefinitions.map((category) => ({
