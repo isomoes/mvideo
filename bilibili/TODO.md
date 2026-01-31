@@ -126,24 +126,65 @@ Based on [ARCH.md](./ARCH.md)
 - [x] Display render progress and status
 - [x] Show render history and output links
 
-## Phase 5: Render Service
+## Phase 5: Integration (UI + Server)
 
-### 5.1 Render Pipeline (Requires Phase 3 + Phase 4.5)
+> **Note:** Phase 4 UI and Phase 2 Server components are built separately but NOT integrated.
+> This phase connects them into a working end-to-end flow.
 
-- [ ] Create render job queue
-- [ ] Implement project graph to Remotion props resolver
-- [ ] Set up Remotion renderer (local mode)
-- [ ] Add render progress tracking
-- [ ] Store output artifacts
+### 5.1 Resources Panel Integration (Requires 2.1 + 4.1)
 
-### 5.2 Render Options (Can start after 5.1)
+- [ ] Connect ResourcesPanel to `/api/assets` endpoint (currently uses hardcoded demo data)
+- [ ] Implement file upload via Import button -> `/api/ingestion/import`
+- [ ] Display actual asset thumbnails from derived assets
+- [ ] Show real asset metadata (duration, size) from Asset records
+- [ ] Add asset to project store when dragged to timeline
+
+### 5.2 Timeline Integration (Requires 5.1)
+
+- [ ] Connect Timeline to project store tracks (currently uses demo tracks in page.tsx)
+- [ ] Load waveform data from asset derived paths for audio clips
+- [ ] Display actual thumbnails on video clips
+- [ ] Sync clip changes back to project store
+
+### 5.3 Preview Integration (Requires 5.2)
+
+- [ ] Connect PreviewPlayer to resolved composition props from project
+- [ ] Use `resolveProjectToMainCompositionProps` for live preview
+- [ ] Update preview when timeline clips change
+- [ ] Load actual video sources from asset paths
+
+### 5.4 Inspector Integration (Requires 5.2)
+
+- [ ] Connect InspectorPanel to selected clip from project store
+- [ ] Persist clip property changes to project store
+- [ ] Update overlay properties in real-time
+
+## Phase 6: Render Service
+
+### 6.1 Render Pipeline (Requires Phase 3 + Phase 5)
+
+- [ ] Create render job queue (database or in-memory)
+- [ ] Connect `/api/render/start` to actual Remotion renderer
+- [ ] Implement project graph to Remotion props resolver in render flow
+- [ ] Set up Remotion renderer (local mode with `@remotion/renderer`)
+- [ ] Add render progress tracking (replace mock in `/api/render/progress`)
+- [ ] Store output artifacts to file system
+
+### 6.2 Export Panel Integration (Requires 6.1)
+
+- [ ] Connect ExportPanel "Start Render" to `/api/render/start` (currently simulates progress)
+- [ ] Poll `/api/render/progress` for real progress updates
+- [ ] Fetch render history from `/api/render/history`
+- [ ] Enable download of completed renders
+
+### 6.3 Render Options (Can start after 6.1)
 
 - [ ] Implement render presets (quality profiles)
 - [ ] Add batch rendering support
 
-## Phase 6: Plugin System
+## Phase 7: Plugin System
 
-### 6.1 Plugin Framework (Can start after Phase 4.1)
+### 7.1 Plugin Framework (Can start after Phase 5)
 
 - [ ] Design plugin API interface
 - [ ] Implement plugin loader
@@ -154,7 +195,7 @@ Based on [ARCH.md](./ARCH.md)
 - [ ] Implement `registerPanel()` for UI extensions
 - [ ] Add plugin configuration system
 
-### 6.2 Example Plugin: Audio to SRT (Requires 6.1 + 2.3)
+### 7.2 Example Plugin: Audio to SRT (Requires 7.1 + 2.3)
 
 - [ ] Create plugin scaffold
 - [ ] Implement audio track extraction
@@ -163,25 +204,25 @@ Based on [ARCH.md](./ARCH.md)
 - [ ] Attach SRT to project assets
 - [ ] Create subtitle track editor panel
 
-## Phase 7: Polish & Production Readiness
+## Phase 8: Polish & Production Readiness
 
-### 7.1 Observability || 7.2 Performance
+### 8.1 Observability || 8.2 Performance
 
-**7.1 Observability:**
+**8.1 Observability:**
 
 - [ ] Add logging for pipeline steps
 - [ ] Track render durations
 - [ ] Implement error reporting
 - [ ] Add usage analytics (optional)
 
-**7.2 Performance:**
+**8.2 Performance:**
 
 - [ ] Optimize timeline rendering (virtualization)
 - [ ] Implement lazy loading for large projects
 - [ ] Add media cache warming
 - [ ] Profile and optimize hot paths
 
-### 7.3 Testing & Documentation
+### 8.3 Testing & Documentation
 
 - [ ] Write unit tests for core services
 - [ ] Add integration tests for media pipeline
@@ -191,7 +232,21 @@ Based on [ARCH.md](./ARCH.md)
 
 ---
 
-## Dependency Graph (Simplified)
+## Current Status Summary
+
+| Component | UI Built | Server Built | Integrated |
+|-----------|----------|--------------|------------|
+| Asset Ingestion | - | Yes | - |
+| Asset Store | - | Yes | - |
+| FFmpeg Processing | - | Yes | - |
+| Resources Panel | Yes (demo data) | Yes | No |
+| Timeline | Yes (demo data) | Yes (store) | No |
+| Preview Player | Yes | Yes (compositions) | Partial |
+| Inspector Panel | Yes | Yes (store) | No |
+| Export Panel | Yes (simulated) | Stub | No |
+| Render API | - | Stub | No |
+
+## Dependency Graph (Updated)
 
 ```
 Phase 1 (Foundation)
@@ -200,24 +255,26 @@ Phase 1 (Foundation)
 +---+---+-------------------+
 |       |                   |
 v       v                   v
-Phase 2 Phase 3             Phase 4.1, 4.2
-(Media)  (Compositions)      (UI Core)
+Phase 2 Phase 3             Phase 4
+(Media)  (Compositions)      (UI - Standalone)
 |       |                   |
-+---+---+                   v
-    |                   Phase 4.3, 4.4, 4.5
-    v                   (Timeline, Inspector, Export)
-Phase 5                     |
-(Render)                    |
-    |                       |
-    +-----------+-----------+
-                |
-                v
-            Phase 6
-            (Plugins)
-                |
-                v
-            Phase 7
-            (Polish)
++---+---+-------------------+
+            |
+            v
+        Phase 5
+        (Integration)
+            |
+            v
+        Phase 6
+        (Render Service)
+            |
+            v
+        Phase 7
+        (Plugins)
+            |
+            v
+        Phase 8
+        (Polish)
 ```
 
 ## Parallel Execution Summary
@@ -228,15 +285,24 @@ Phase 5                     |
 | 3.x Compositions     | 2.x Media Pipeline       |
 | 4.1 Core Layout      | 4.2 Preview Player       |
 | 4.4 Inspector        | 4.5 Export Panel         |
-| 6.1 Plugin Framework | 5.x Render Service       |
-| 7.1 Observability    | 7.2 Performance          |
+| 5.1-5.4 Integration  | Sequential (dependencies)|
+| 7.1 Plugin Framework | 6.x Render Service       |
+| 8.1 Observability    | 8.2 Performance          |
 
-## Milestones Mapping
+## Milestones Mapping (Updated)
 
-| Milestone                                      | Phases            |
-| ---------------------------------------------- | ----------------- |
-| M1: Ingestion + trimming + audio normalization | 1.1, 1.2, 2.1-2.4 |
-| M2: Remotion compositions for intro/main/outro | 3.1-3.3           |
-| M3: Studio UI with timeline and preview        | 4.1-4.5           |
-| M4: Render service integration                 | 5.1-5.2           |
-| M5: Plugin framework with example              | 6.1-6.2           |
+| Milestone                                      | Phases            | Status |
+| ---------------------------------------------- | ----------------- | ------ |
+| M1: Ingestion + trimming + audio normalization | 1.1, 1.2, 2.1-2.4 | Done |
+| M2: Remotion compositions for intro/main/outro | 3.1-3.3           | Done |
+| M3: Studio UI with timeline and preview        | 4.1-4.5           | Done (UI only) |
+| M4: End-to-end integration                     | 5.1-5.4           | Not Started |
+| M5: Render service integration                 | 6.1-6.3           | Not Started |
+| M6: Plugin framework with example              | 7.1-7.2           | Not Started |
+
+## Next Steps (Priority Order)
+
+1. **5.1 Resources Panel Integration** - Connect UI to actual assets API
+2. **5.2 Timeline Integration** - Use real project store data instead of demo tracks
+3. **5.3 Preview Integration** - Connect preview to resolved composition props
+4. **6.1 Render Pipeline** - Implement actual Remotion rendering
