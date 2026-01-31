@@ -7,3 +7,4 @@ export { TimelinePanel } from "./TimelinePanel";
 export { KeymapModal } from "./KeymapModal";
 export { ExportPanel } from "./ExportPanel";
 export { ExtensionsPanel } from "./ExtensionsPanel";
+export { NewProjectModal } from "./NewProjectModal";

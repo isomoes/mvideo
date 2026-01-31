@@ -7,6 +7,13 @@ type ProjectState = {
   project: Project;
   setProject: (project: Project) => void;
   updateProject: (partial: Partial<Project>) => void;
+  createProject: (config: {
+    name: string;
+    width: number;
+    height: number;
+    fps: number;
+    durationInFrames: number;
+  }) => Promise<Project>;
   modifyProject: (projectId: string, partial: Partial<Project>) => Promise<Project>;
   addAsset: (asset: Asset) => void;
   removeAsset: (assetId: string) => void;
@@ -42,6 +49,42 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         ...partial,
       }),
     })),
+  createProject: async (config) => {
+    const projectId = globalThis.crypto?.randomUUID?.() ?? `project-${Date.now()}`;
+    const now = new Date().toISOString();
+    
+    const newProject: Project = {
+      schemaVersion: 1,
+      id: projectId,
+      name: config.name,
+      width: config.width,
+      height: config.height,
+      fps: config.fps,
+      durationInFrames: config.durationInFrames,
+      assets: [],
+      tracks: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const response = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newProject),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.type !== "success") {
+      throw new Error(payload.message ?? "Failed to create project.");
+    }
+    
+    set({ project: payload.data });
+    void runOnProjectLoaded(payload.data);
+    
+    // Store as last project
+    globalThis.localStorage?.setItem("mvideo:lastProjectId", payload.data.id);
+    
+    return payload.data;
+  },
   modifyProject: async (projectId, partial) => {
     const response = await fetch(`/api/projects/${projectId}`, {
       method: "PATCH",

@@ -18,6 +18,7 @@ import {
   TimelinePanel,
   KeymapModal,
   ExtensionsPanel,
+  NewProjectModal,
 } from "../components/studio";
 import { useStudioKeyboardShortcuts } from "../hooks/useStudioKeyboardShortcuts";
 import { useUIStore } from "../services/ui-store";
@@ -39,10 +40,11 @@ const Home: NextPage = () => {
     "select",
   );
   const { toggleKeymaps } = useUIStore();
-  const { project, updateClip, updateProject, loadProject, saveProject, listProjects } = useProjectStore();
+  const { project, updateClip, updateProject, createProject, loadProject, saveProject, listProjects } = useProjectStore();
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [isProjectReady, setIsProjectReady] = useState(false);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
 
   const playerRef = useRef<PlayerRef>(null);
 
@@ -66,6 +68,11 @@ const Home: NextPage = () => {
         const projects = await listProjects();
         if (projects.length > 0) {
           await loadProject(projects[0].id);
+        } else {
+          // No projects exist, show the new project modal
+          if (!cancelled) {
+            setShowNewProjectModal(true);
+          }
         }
       } catch (error) {
         console.error("Failed to load project", error);
@@ -268,6 +275,7 @@ const Home: NextPage = () => {
       <StudioLayout
         toolbar={
           <StudioToolbar
+            projectName={project.name}
             isPlaying={isPlaying}
             snapEnabled={snapEnabled}
             rippleEnabled={rippleEnabled}
@@ -276,6 +284,7 @@ const Home: NextPage = () => {
             totalFrames={totalFrames}
             fps={compositionPreviewConfig.fps}
             activeTool={activeTool}
+            onNewProject={() => setShowNewProjectModal(true)}
             onTogglePlay={handleTogglePlay}
             onStepBackward={() => handleStep(-1)}
             onStepForward={() => handleStep(1)}
@@ -335,6 +344,19 @@ const Home: NextPage = () => {
         }
       />
       <KeymapModal />
+      <NewProjectModal
+        isOpen={showNewProjectModal}
+        onClose={() => setShowNewProjectModal(false)}
+        onCreateProject={async (config) => {
+          try {
+            await createProject(config);
+            setShowNewProjectModal(false);
+          } catch (error) {
+            console.error("Failed to create project:", error);
+            alert("Failed to create project: " + (error as Error).message);
+          }
+        }}
+      />
     </>
   );
 };

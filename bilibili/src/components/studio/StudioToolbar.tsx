@@ -96,6 +96,18 @@ const MagnetIcon = () => (
   </svg>
 );
 
+const PlusIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+const FolderIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
 interface ToolbarButtonProps {
   icon: React.ReactNode;
   label?: string;
@@ -124,6 +136,7 @@ const ToolbarDivider = () => (
 );
 
 interface StudioToolbarProps {
+  projectName?: string;
   isPlaying: boolean;
   snapEnabled: boolean;
   rippleEnabled: boolean;
@@ -132,6 +145,7 @@ interface StudioToolbarProps {
   totalFrames: number;
   fps: number;
   activeTool: "select" | "razor" | "hand";
+  onNewProject?: () => void;
   onTogglePlay: () => void;
   onStepBackward: () => void;
   onStepForward: () => void;
@@ -156,6 +170,7 @@ const formatTimecode = (frame: number, fps: number) => {
 };
 
 export const StudioToolbar = ({
+  projectName,
   isPlaying,
   snapEnabled,
   rippleEnabled,
@@ -164,6 +179,7 @@ export const StudioToolbar = ({
   totalFrames,
   fps,
   activeTool,
+  onNewProject,
   onTogglePlay,
   onStepBackward,
   onStepForward,
@@ -181,7 +197,19 @@ export const StudioToolbar = ({
     <div className="flex items-center justify-between h-full px-3">
       {/* Left Section: Project Info & Undo/Redo */}
       <div className="flex items-center gap-2">
-        <span className="text-studio-text font-medium text-sm mr-2">Studio</span>
+        <div className="flex items-center gap-2">
+          <FolderIcon />
+          <span className="text-studio-text font-medium text-sm">{projectName || "No Project"}</span>
+        </div>
+        <ToolbarDivider />
+        <button
+          className="flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors bg-studio-accent text-white hover:bg-studio-accent-hover"
+          onClick={onNewProject}
+          title="New Project (Ctrl+N)"
+        >
+          <PlusIcon />
+          <span className="hidden lg:inline">New</span>
+        </button>
         <ToolbarDivider />
         <ToolbarButton icon={<UndoIcon />} label="Undo" onClick={onUndo} shortcut="Ctrl+Z" />
         <ToolbarButton icon={<RedoIcon />} label="Redo" onClick={onRedo} shortcut="Ctrl+Shift+Z" />
