@@ -111,34 +111,37 @@
 }
 
 /* Resizable Panel Styles */
-[data-panel-resize-handle-enabled] {
+[data-separator] {
   position: relative;
+  outline: none;
+  touch-action: none;
+  user-select: none;
 }
 
-[data-panel-resize-handle-enabled][data-resize-handle-active] {
+[data-separator][data-separator="drag"] {
   background: var(--studio-accent) !important;
 }
 
-/* Horizontal resize handle */
-[data-panel-resize-handle-enabled][data-panel-resize-handle-id*="horizontal"] {
-  width: 4px !important;
+/* Horizontal resize handle (for horizontal panel groups - vertical divider) */
+[data-separator][aria-orientation="vertical"] {
   cursor: col-resize;
   background: var(--studio-border);
-  transition: background 0.2s ease;
+  transition: background 0.15s ease;
 }
 
-[data-panel-resize-handle-enabled][data-panel-resize-handle-id*="horizontal"]:hover {
+[data-separator][aria-orientation="vertical"]:hover,
+[data-separator][aria-orientation="vertical"][data-separator="drag"] {
   background: var(--studio-accent);
 }
 
-/* Vertical resize handle */
-[data-panel-resize-handle-enabled][data-panel-resize-handle-id*="vertical"] {
-  height: 4px !important;
+/* Vertical resize handle (for vertical panel groups - horizontal divider) */
+[data-separator][aria-orientation="horizontal"] {
   cursor: row-resize;
   background: var(--studio-border);
-  transition: background 0.2s ease;
+  transition: background 0.15s ease;
 }
 
-[data-panel-resize-handle-enabled][data-panel-resize-handle-id*="vertical"]:hover {
+[data-separator][aria-orientation="horizontal"]:hover,
+[data-separator][aria-orientation="horizontal"][data-separator="drag"] {
   background: var(--studio-accent);
 }
