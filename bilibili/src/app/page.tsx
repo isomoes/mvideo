@@ -127,6 +127,9 @@ const Home: NextPage = () => {
     type: "video" | "audio" | "image" | "text";
     startFrame: number;
     durationInFrames: number;
+    source?: string;
+    trimStartFrame?: number;
+    trimEndFrame?: number;
   } | null>(null);
 
   const playerRef = useRef<PlayerRef>(null);
@@ -207,6 +210,9 @@ const Home: NextPage = () => {
                 : track.type,
           startFrame: clip.start,
           durationInFrames: clip.duration,
+          source: track.label,
+          trimStartFrame: 0,
+          trimEndFrame: clip.duration,
         });
       }
     },
