@@ -18,6 +18,21 @@
   --geist-error: #e00;
 
   --subtitle: #666;
+
+  /* Studio UI Colors */
+  --studio-bg: #1a1a1a;
+  --studio-panel-bg: #242424;
+  --studio-panel-header: #2d2d2d;
+  --studio-border: #3a3a3a;
+  --studio-accent: #4a9eff;
+  --studio-accent-hover: #5aafff;
+  --studio-text: #e0e0e0;
+  --studio-text-muted: #888;
+  --studio-timeline-bg: #1e1e1e;
+  --studio-track-bg: #2a2a2a;
+  --studio-playhead: #ff4444;
+  --studio-success: #4ade80;
+  --studio-warning: #fbbf24;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -51,6 +66,21 @@
   --font-geist: var(--geist-font);
   --animate-spinner: spinner 1.2s linear infinite;
 
+  /* Studio UI Theme */
+  --color-studio-bg: var(--studio-bg);
+  --color-studio-panel-bg: var(--studio-panel-bg);
+  --color-studio-panel-header: var(--studio-panel-header);
+  --color-studio-border: var(--studio-border);
+  --color-studio-accent: var(--studio-accent);
+  --color-studio-accent-hover: var(--studio-accent-hover);
+  --color-studio-text: var(--studio-text);
+  --color-studio-text-muted: var(--studio-text-muted);
+  --color-studio-timeline-bg: var(--studio-timeline-bg);
+  --color-studio-track-bg: var(--studio-track-bg);
+  --color-studio-playhead: var(--studio-playhead);
+  --color-studio-success: var(--studio-success);
+  --color-studio-warning: var(--studio-warning);
+
   @keyframes spinner {
     0% {
       opacity: 1;
@@ -59,4 +89,23 @@
       opacity: 0.15;
     }
   }
+}
+
+/* Studio UI Base Styles */
+.studio-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.studio-scrollbar::-webkit-scrollbar-track {
+  background: var(--studio-bg);
+}
+
+.studio-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--studio-border);
+  border-radius: 4px;
+}
+
+.studio-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--studio-text-muted);
 }
