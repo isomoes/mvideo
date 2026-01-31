@@ -36,7 +36,7 @@ const getContentType = (filePath: string) => {
 };
 
 export const GET = async (
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string; assetId: string }> },
 ) => {
   try {
@@ -49,10 +49,44 @@ export const GET = async (
       );
     }
 
+    const stats = await fs.stat(record.sourcePath);
+    const fileSize = stats.size;
+    const contentType = getContentType(record.sourcePath);
+
+    // Handle range requests for video seeking
+    const range = req.headers.get("range");
+    
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunkSize = end - start + 1;
+
+      const fileHandle = await fs.open(record.sourcePath, "r");
+      const buffer = Buffer.alloc(chunkSize);
+      await fileHandle.read(buffer, 0, chunkSize, start);
+      await fileHandle.close();
+
+      return new NextResponse(buffer, {
+        status: 206,
+        headers: {
+          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": chunkSize.toString(),
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    }
+
+    // Full file response
     const buffer = await fs.readFile(record.sourcePath);
     return new NextResponse(buffer, {
       headers: {
-        "Content-Type": getContentType(record.sourcePath),
+        "Content-Type": contentType,
+        "Content-Length": fileSize.toString(),
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
   } catch (error) {

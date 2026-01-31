@@ -3,7 +3,6 @@ import {
   AbsoluteFill,
   Sequence,
   Video,
-  OffthreadVideo,
   interpolate,
   staticFile,
   useCurrentFrame,
@@ -168,6 +167,10 @@ export const MainComposition = (
               width: "100%",
               height: "100%",
               objectFit: "cover",
+            }}
+            onError={(e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+              console.error("[MainComposition] Video error:", e);
+              console.error("[MainComposition] Failed to load:", resolvedVideoSrc);
             }}
           />
           {/* Debug overlay - remove after testing */}
