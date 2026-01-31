@@ -116,6 +116,14 @@ export const Timeline: React.FC<TimelineProps> = ({
         return;
       }
 
+      if (event.shiftKey) {
+        event.preventDefault();
+        if (timelineRef.current) {
+          timelineRef.current.scrollLeft += event.deltaY + event.deltaX;
+        }
+        return;
+      }
+
       event.preventDefault();
       const step = event.deltaY > 0 ? -10 : 10;
       const nextZoom = Math.min(maxZoom, Math.max(minZoom, zoom + step));
