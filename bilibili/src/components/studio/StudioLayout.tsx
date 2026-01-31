@@ -3,8 +3,8 @@
 import { ReactNode } from "react";
 import {
   Panel as ResizablePanel,
-  PanelGroup as ResizablePanelGroup,
-  PanelResizeHandle as ResizableHandle,
+  Group as ResizablePanelGroup,
+  Separator as ResizableHandle,
 } from "react-resizable-panels";
 
 interface StudioLayoutProps {
@@ -44,7 +44,7 @@ export const StudioLayout = ({
 
               <ResizableHandle 
                 id="horizontal-resources-preview"
-                className="w-1 bg-studio-border hover:bg-studio-accent transition-colors cursor-col-resize" 
+                className="w-1.5 z-10 bg-studio-border hover:bg-studio-accent transition-colors cursor-col-resize" 
               />
 
               {/* Center: Preview Panel */}
@@ -56,7 +56,7 @@ export const StudioLayout = ({
 
               <ResizableHandle 
                 id="horizontal-preview-inspector"
-                className="w-1 bg-studio-border hover:bg-studio-accent transition-colors cursor-col-resize" 
+                className="w-1.5 z-10 bg-studio-border hover:bg-studio-accent transition-colors cursor-col-resize" 
               />
 
               {/* Right: Inspector Panel */}
@@ -70,7 +70,7 @@ export const StudioLayout = ({
 
           <ResizableHandle 
             id="vertical-upper-timeline"
-            className="h-1 bg-studio-border hover:bg-studio-accent transition-colors cursor-row-resize" 
+            className="h-1.5 z-10 bg-studio-border hover:bg-studio-accent transition-colors cursor-row-resize" 
           />
 
           {/* Bottom: Timeline Panel */}
