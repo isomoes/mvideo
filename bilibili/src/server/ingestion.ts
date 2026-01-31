@@ -199,9 +199,20 @@ const processDerivedAssets = async (
 };
 
 export const ingestUploadedFile = async (
-  projectId: string,
-  file: File,
+  projectIdOrFile: string | File,
+  maybeFile?: File,
 ): Promise<AssetRecord> => {
+  let projectId: string;
+  let file: File;
+
+  if (typeof projectIdOrFile === "string") {
+    projectId = projectIdOrFile;
+    file = maybeFile!;
+  } else {
+    projectId = "global";
+    file = projectIdOrFile;
+  }
+
   return await logger.trackDuration("ingest-uploaded-file", async () => {
     const assetId = randomUUID();
     const originalName = sanitizeFilename(file.name || "source");

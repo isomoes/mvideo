@@ -97,12 +97,35 @@ export const writeAssetRecord = async (record: AssetRecord): Promise<void> => {
 
 export const readAssetRecord = async (
   projectId: string,
-  assetId: string,
+  assetId?: string,
 ): Promise<AssetRecord | null> => {
   try {
-    const recordPath = getAssetRecordPath(projectId, assetId);
-    const contents = await fs.readFile(recordPath, "utf-8");
-    return JSON.parse(contents) as AssetRecord;
+    if (assetId) {
+      const recordPath = getAssetRecordPath(projectId, assetId);
+      const contents = await fs.readFile(recordPath, "utf-8");
+      return JSON.parse(contents) as AssetRecord;
+    }
+
+    // If only one argument is provided, treat it as assetId and search all projects
+    const assetIdToFind = projectId;
+    const storageRoot = getStorageRoot();
+    const projectsRoot = path.join(storageRoot, "projects");
+    
+    const projectEntries = await fs.readdir(projectsRoot, { withFileTypes: true });
+    for (const entry of projectEntries) {
+      if (entry.isDirectory()) {
+        const recordPath = getAssetRecordPath(entry.name, assetIdToFind);
+        try {
+          const contents = await fs.readFile(recordPath, "utf-8");
+          return JSON.parse(contents) as AssetRecord;
+        } catch (e) {
+          // Skip if not found in this project
+          continue;
+        }
+      }
+    }
+    
+    return null;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") {
@@ -112,20 +135,37 @@ export const readAssetRecord = async (
   }
 };
 
-export const listAssetRecords = async (projectId: string): Promise<AssetRecord[]> => {
-  const assetsRoot = getProjectAssetsDir(projectId);
+export const listAssetRecords = async (projectId?: string): Promise<AssetRecord[]> => {
+  const storageRoot = getStorageRoot();
+  const projectsRoot = path.join(storageRoot, "projects");
 
   try {
-    const entries = await fs.readdir(assetsRoot, { withFileTypes: true });
-    const records = await Promise.all(
-      entries
-        .filter((entry) => entry.isDirectory())
-        .map(async (entry) => readAssetRecord(projectId, entry.name)),
-    );
+    if (projectId) {
+      const assetsRoot = getProjectAssetsDir(projectId);
+      const entries = await fs.readdir(assetsRoot, { withFileTypes: true });
+      const records = await Promise.all(
+        entries
+          .filter((entry) => entry.isDirectory())
+          .map(async (entry) => readAssetRecord(projectId, entry.name)),
+      );
 
-    return records
-      .filter((record): record is AssetRecord => Boolean(record))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return records
+        .filter((record): record is AssetRecord => Boolean(record))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }
+
+    // List all assets from all projects
+    const projectEntries = await fs.readdir(projectsRoot, { withFileTypes: true });
+    const allRecords: AssetRecord[] = [];
+    
+    for (const entry of projectEntries) {
+      if (entry.isDirectory()) {
+        const projectAssets = await listAssetRecords(entry.name);
+        allRecords.push(...projectAssets);
+      }
+    }
+
+    return allRecords.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") {
@@ -137,12 +177,30 @@ export const listAssetRecords = async (projectId: string): Promise<AssetRecord[]
 
 export const updateAssetRecord = async (
   projectId: string,
-  assetId: string,
-  update: Partial<AssetRecord>,
+  assetIdOrUpdate: string | Partial<AssetRecord>,
+  maybeUpdate?: Partial<AssetRecord>,
 ): Promise<AssetRecord> => {
-  const existing = await readAssetRecord(projectId, assetId);
+  let actualProjectId = projectId;
+  let actualAssetId: string;
+  let update: Partial<AssetRecord>;
+
+  if (typeof assetIdOrUpdate === "string") {
+    actualAssetId = assetIdOrUpdate;
+    update = maybeUpdate!;
+  } else {
+    // If second arg is the update object, first arg must be assetId
+    const record = await readAssetRecord(projectId);
+    if (!record) {
+      throw new Error(`Asset not found: ${projectId}`);
+    }
+    actualProjectId = record.projectId;
+    actualAssetId = record.id;
+    update = assetIdOrUpdate;
+  }
+
+  const existing = await readAssetRecord(actualProjectId, actualAssetId);
   if (!existing) {
-    throw new Error(`Asset not found: ${assetId}`);
+    throw new Error(`Asset not found: ${actualAssetId}`);
   }
 
   const next: AssetRecord = {
@@ -159,7 +217,17 @@ export const updateAssetRecord = async (
   return next;
 };
 
-export const deleteAsset = async (projectId: string, assetId: string): Promise<void> => {
-  const assetDir = getAssetDir(projectId, assetId);
+export const deleteAsset = async (projectId: string, assetId?: string): Promise<void> => {
+  let actualProjectId = projectId;
+  let actualAssetId = assetId;
+
+  if (!actualAssetId) {
+    const record = await readAssetRecord(projectId);
+    if (!record) return; // Already gone or not found
+    actualProjectId = record.projectId;
+    actualAssetId = record.id;
+  }
+
+  const assetDir = getAssetDir(actualProjectId, actualAssetId);
   await fs.rm(assetDir, { recursive: true, force: true });
 };
