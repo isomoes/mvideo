@@ -1,7 +1,7 @@
-import { COMP_NAME } from "../../types/constants";
+import { MAIN_COMP_NAME } from "../../types/constants";
 import { getCompositionById } from "./composition-registry";
 
-export const PREVIEW_COMPOSITION_ID = COMP_NAME;
+export const PREVIEW_COMPOSITION_ID = MAIN_COMP_NAME;
 
 const previewComposition = getCompositionById(PREVIEW_COMPOSITION_ID);
 

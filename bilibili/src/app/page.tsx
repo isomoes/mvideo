@@ -24,6 +24,7 @@ import { useStudioKeyboardShortcuts } from "../hooks/useStudioKeyboardShortcuts"
 import { useUIStore } from "../services/ui-store";
 import { useProjectStore } from "../services/project-store";
 import { compositionPreviewConfig } from "../remotion/preview-config";
+import { useResolvedCompositionProps } from "../hooks/useResolvedCompositionProps";
 
 const clampFrame = (frame: number, totalFrames: number) =>
   Math.min(Math.max(frame, 0), totalFrames - 1);
@@ -48,6 +49,9 @@ const Home: NextPage = () => {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
 
   const playerRef = useRef<PlayerRef>(null);
+
+  // Resolve project data to composition props for live preview
+  const compositionProps = useResolvedCompositionProps(project);
 
   const inputProps: z.infer<typeof MyCompProps> = useMemo(() => {
     return {
@@ -129,6 +133,14 @@ const Home: NextPage = () => {
       window.clearTimeout(handle);
     };
   }, [isProjectReady, project, isDirty, saveProject]);
+
+  // Update preview when timeline clips change
+  useEffect(() => {
+    // Seek player to current frame to refresh the preview with new composition props
+    if (playerRef.current && isProjectReady) {
+      playerRef.current.seekTo(currentFrame);
+    }
+  }, [compositionProps, currentFrame, isProjectReady]);
 
   const seekToFrame = useCallback(
     (frame: number) => {
@@ -330,7 +342,7 @@ const Home: NextPage = () => {
         previewPanel={
           <PreviewPlayer
             component={compositionPreviewConfig.component}
-            inputProps={inputProps}
+            inputProps={compositionProps}
             durationInFrames={totalFrames}
             fps={project.fps}
             width={project.width}
