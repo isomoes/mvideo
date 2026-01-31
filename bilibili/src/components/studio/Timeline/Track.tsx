@@ -1,11 +1,12 @@
 "use client";
 
 import React from "react";
-import { Track as TrackModel, Clip as ClipModel } from "../../../../types/models";
+import { Track as TrackModel, Clip as ClipModel, Asset } from "../../../../types/models";
 import { Clip } from "./Clip";
 
 interface TrackProps {
   track: TrackModel;
+  assetsById: Map<string, Asset>;
   pixelsPerFrame: number;
   headerWidth: number;
   trackHeight: number;
@@ -65,6 +66,7 @@ const MuteIcon = () => (
 
 export const Track: React.FC<TrackProps> = ({
   track,
+  assetsById,
   pixelsPerFrame,
   headerWidth,
   trackHeight,
@@ -134,6 +136,7 @@ export const Track: React.FC<TrackProps> = ({
           <Clip
             key={clip.id}
             clip={clip}
+            asset={assetsById.get(clip.assetId)}
             pixelsPerFrame={pixelsPerFrame}
             isSelected={selectedClipId === clip.id}
             snapEnabled={snapEnabled}
@@ -143,6 +146,7 @@ export const Track: React.FC<TrackProps> = ({
             onMove={(newStart) => onClipMove(clip.id, newStart)}
             onTrim={(newStart, newDuration) => onClipTrim(clip.id, newStart, newDuration)}
             color={getTrackColor(track.kind)}
+            label={assetsById.get(clip.assetId)?.name ?? clip.id}
           />
         ))}
       </div>

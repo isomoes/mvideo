@@ -7,7 +7,7 @@ import React, {
   useEffect,
   useMemo,
 } from "react";
-import { Track as TrackModel, Project } from "../../../../types/models";
+import { Track as TrackModel, Project, Asset } from "../../../../types/models";
 import { Ruler } from "./Ruler";
 import { Track } from "./Track";
 import { Playhead } from "./Playhead";
@@ -40,6 +40,9 @@ export const Timeline: React.FC<TimelineProps> = ({
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const assetsById = useMemo(() => {
+    return new Map<string, Asset>(project.assets.map((asset) => [asset.id, asset]));
+  }, [project.assets]);
 
   // Calculate timeline width based on zoom
   // zoom 100% = 2 pixels per frame
@@ -177,6 +180,7 @@ export const Timeline: React.FC<TimelineProps> = ({
               <Track
                 key={track.id}
                 track={track}
+                assetsById={assetsById}
                 pixelsPerFrame={pixelsPerFrame}
                 headerWidth={TRACK_HEADER_WIDTH}
                 trackHeight={TRACK_HEIGHT}

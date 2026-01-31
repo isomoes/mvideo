@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useCallback, useRef } from "react";
-import { Clip as ClipModel } from "../../../../types/models";
+import { Clip as ClipModel, Asset } from "../../../../types/models";
 import { Waveform } from "./Waveform";
 
 interface ClipProps {
   clip: ClipModel;
+  asset?: Asset;
   pixelsPerFrame: number;
   isSelected: boolean;
   onSelect: () => void;
@@ -20,6 +21,7 @@ interface ClipProps {
 
 export const Clip: React.FC<ClipProps> = ({
   clip,
+  asset,
   pixelsPerFrame,
   isSelected,
   onSelect,
@@ -99,9 +101,15 @@ export const Clip: React.FC<ClipProps> = ({
     window.addEventListener("pointerup", handlePointerUp);
   }, [clip, pixelsPerFrame, onSelect, onMove, onTrim, snapEnabled, snapPoints]);
 
+  const thumbnailUrl = asset?.kind === "video"
+    ? `/api/assets/${asset.id}/thumbnails/0`
+    : asset?.kind === "image"
+      ? asset.src
+      : undefined;
+
   return (
     <div
-      className={`absolute top-1 bottom-1 rounded cursor-pointer transition-shadow select-none ${color} ${
+      className={`absolute top-1 bottom-1 rounded cursor-pointer transition-shadow select-none overflow-hidden ${color} ${
         isSelected ? "ring-2 ring-white shadow-lg z-10" : "hover:brightness-110"
       } ${isDragging ? "opacity-80 cursor-grabbing" : ""}`}
       style={{
@@ -110,8 +118,20 @@ export const Clip: React.FC<ClipProps> = ({
       }}
       onPointerDown={(e) => handlePointerDown(e, "move")}
     >
+      {thumbnailUrl && (
+        <div className="absolute inset-0">
+          <img
+            src={thumbnailUrl}
+            alt={asset?.name ?? clip.id}
+            className="h-full w-full object-cover opacity-70"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 bg-black/30" />
+        </div>
+      )}
       {isAudio && (
         <Waveform
+          assetId={asset?.id ?? clip.assetId}
           durationInFrames={clip.durationInFrames}
           pixelsPerFrame={pixelsPerFrame}
         />

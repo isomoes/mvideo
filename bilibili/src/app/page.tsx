@@ -2,7 +2,7 @@
 
 import { type PlayerRef } from "@remotion/player";
 import type { NextPage } from "next";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import {
   defaultMyCompProps,
@@ -21,91 +21,11 @@ import {
 } from "../components/studio";
 import { useStudioKeyboardShortcuts } from "../hooks/useStudioKeyboardShortcuts";
 import { useUIStore } from "../services/ui-store";
+import { useProjectStore } from "../services/project-store";
 import { compositionPreviewConfig } from "../remotion/preview-config";
 
 const clampFrame = (frame: number, totalFrames: number) =>
   Math.min(Math.max(frame, 0), totalFrames - 1);
-
-// Demo timeline tracks
-const createDemoTracks = (totalFrames: number) => [
-  {
-    id: "video",
-    label: "Video 1",
-    type: "video" as const,
-    clips: [
-      {
-        id: "intro",
-        label: "Intro Comp",
-        start: 0,
-        duration: Math.max(12, Math.floor(totalFrames * 0.1)),
-        color: "bg-amber-500",
-      },
-      {
-        id: "main",
-        label: "OBS Recording",
-        start: Math.max(12, Math.floor(totalFrames * 0.1)),
-        duration: Math.max(1, Math.floor(totalFrames * 0.8)),
-        color: "bg-sky-500",
-      },
-      {
-        id: "outro",
-        label: "Outro Comp",
-        start: Math.max(12, Math.floor(totalFrames * 0.9)),
-        duration: Math.max(12, Math.floor(totalFrames * 0.1)),
-        color: "bg-emerald-500",
-      },
-    ],
-  },
-  {
-    id: "audio",
-    label: "Audio 1",
-    type: "audio" as const,
-    clips: [
-      {
-        id: "normalized",
-        label: "Normalized Audio",
-        start: Math.max(12, Math.floor(totalFrames * 0.1)),
-        duration: Math.max(1, Math.floor(totalFrames * 0.8)),
-        color: "bg-emerald-600",
-      },
-    ],
-  },
-  {
-    id: "overlay",
-    label: "Overlays",
-    type: "overlay" as const,
-    clips: [
-      {
-        id: "title",
-        label: "Title Card",
-        start: Math.max(10, Math.floor(totalFrames * 0.08)),
-        duration: Math.max(8, Math.floor(totalFrames * 0.18)),
-        color: "bg-purple-500",
-      },
-      {
-        id: "cta",
-        label: "Subscribe CTA",
-        start: Math.max(1, Math.floor(totalFrames * 0.7)),
-        duration: Math.max(8, Math.floor(totalFrames * 0.2)),
-        color: "bg-rose-500",
-      },
-    ],
-  },
-  {
-    id: "subtitles",
-    label: "Subtitles",
-    type: "subtitle" as const,
-    clips: [
-      {
-        id: "srt",
-        label: "Auto SRT",
-        start: Math.max(12, Math.floor(totalFrames * 0.1)),
-        duration: Math.max(1, Math.floor(totalFrames * 0.8)),
-        color: "bg-amber-600",
-      },
-    ],
-  },
-];
 
 const Home: NextPage = () => {
   const [text] = useState<string>(defaultMyCompProps.title);
@@ -119,29 +39,78 @@ const Home: NextPage = () => {
     "select",
   );
   const { toggleKeymaps } = useUIStore();
-  const [selectedClip, setSelectedClip] = useState<{
-    id: string;
-    name: string;
-    type: "video" | "audio" | "image" | "text";
-    startFrame: number;
-    durationInFrames: number;
-    source?: string;
-    trimStartFrame?: number;
-    trimEndFrame?: number;
-  } | null>(null);
+  const { project, updateClip, updateProject, loadProject, saveProject, listProjects } = useProjectStore();
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
+  const [isProjectReady, setIsProjectReady] = useState(false);
 
   const playerRef = useRef<PlayerRef>(null);
-
-  const timelineTracks = useMemo(
-    () => createDemoTracks(totalFrames),
-    [totalFrames],
-  );
 
   const inputProps: z.infer<typeof MyCompProps> = useMemo(() => {
     return {
       title: text,
     };
   }, [text]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadInitialProject = async () => {
+      try {
+        const lastProjectId = globalThis.localStorage?.getItem("mvideo:lastProjectId");
+        if (lastProjectId) {
+          await loadProject(lastProjectId);
+          return;
+        }
+
+        const projects = await listProjects();
+        if (projects.length > 0) {
+          await loadProject(projects[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to load project", error);
+      } finally {
+        if (!cancelled) {
+          setIsProjectReady(true);
+        }
+      }
+    };
+
+    void loadInitialProject();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listProjects, loadProject]);
+
+  useEffect(() => {
+    if (project.durationInFrames !== totalFrames || project.fps !== compositionPreviewConfig.fps || project.width !== compositionPreviewConfig.width || project.height !== compositionPreviewConfig.height) {
+      updateProject({
+        durationInFrames: totalFrames,
+        fps: compositionPreviewConfig.fps,
+        width: compositionPreviewConfig.width,
+        height: compositionPreviewConfig.height,
+      });
+    }
+  }, [compositionPreviewConfig.fps, compositionPreviewConfig.height, compositionPreviewConfig.width, project.durationInFrames, project.fps, project.height, project.width, totalFrames, updateProject]);
+
+  useEffect(() => {
+    if (!isProjectReady) {
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      void saveProject(project).then((saved) => {
+        globalThis.localStorage?.setItem("mvideo:lastProjectId", saved.id);
+      }).catch((error) => {
+        console.error("Failed to save project", error);
+      });
+    }, 800);
+
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [isProjectReady, project, saveProject]);
 
   const seekToFrame = useCallback(
     (frame: number) => {
@@ -191,30 +160,85 @@ const Home: NextPage = () => {
     console.log("Redo");
   }, []);
 
-  const handleClipSelect = useCallback(
-    (clipId: string, trackId: string) => {
-      // Find the clip in tracks
-      const track = timelineTracks.find((t) => t.id === trackId);
-      const clip = track?.clips.find((c) => c.id === clipId);
-      if (clip && track) {
-        setSelectedClip({
-          id: clip.id,
-          name: clip.label,
-          type:
-            track.type === "subtitle"
-              ? "text"
-              : track.type === "overlay"
-                ? "image"
-                : track.type,
-          startFrame: clip.start,
-          durationInFrames: clip.duration,
-          source: track.label,
-          trimStartFrame: 0,
-          trimEndFrame: clip.duration,
-        });
+  const selectedClip = useMemo(() => {
+    if (!selectedClipId || !selectedTrackId) {
+      return null;
+    }
+
+    const track = project.tracks.find((value) => value.id === selectedTrackId);
+    const clip = track?.clips.find((value) => value.id === selectedClipId);
+    if (!clip || !track) {
+      return null;
+    }
+
+    const asset = project.assets.find((value) => value.id === clip.assetId);
+    const resolvedType = asset?.kind
+      ? asset.kind
+      : track.kind === "overlay"
+        ? "image"
+        : track.kind === "audio"
+          ? "audio"
+          : "video";
+
+    return {
+      id: clip.id,
+      name: asset?.name ?? clip.id,
+      type: resolvedType,
+      startFrame: clip.startFrame,
+      durationInFrames: clip.durationInFrames,
+      source: asset?.name ?? track.name,
+      trimStartFrame: clip.trimStartFrame ?? 0,
+      trimEndFrame: clip.durationInFrames,
+    };
+  }, [project.assets, project.tracks, selectedClipId, selectedTrackId]);
+
+  const handleClipSelect = useCallback((clipId: string, trackId: string) => {
+    setSelectedClipId(clipId);
+    setSelectedTrackId(trackId);
+  }, []);
+
+  const handleInspectorClipUpdate = useCallback(
+    (
+      updates: Partial<{
+        startFrame: number;
+        durationInFrames: number;
+        trimStartFrame: number;
+        trimEndFrame: number;
+      }>,
+    ) => {
+      if (!selectedClipId || !selectedTrackId) {
+        return;
+      }
+
+      const track = project.tracks.find((value) => value.id === selectedTrackId);
+      const clip = track?.clips.find((value) => value.id === selectedClipId);
+      if (!clip) {
+        return;
+      }
+
+      const nextTrimStart = updates.trimStartFrame ?? clip.trimStartFrame ?? 0;
+      let nextDuration = updates.durationInFrames ?? clip.durationInFrames;
+
+      if (updates.trimEndFrame !== undefined) {
+        nextDuration = Math.max(1, updates.trimEndFrame - nextTrimStart);
+      }
+
+      const partial: Partial<typeof clip> = {};
+      if (updates.startFrame !== undefined) {
+        partial.startFrame = Math.max(0, updates.startFrame);
+      }
+      if (updates.durationInFrames !== undefined || updates.trimEndFrame !== undefined) {
+        partial.durationInFrames = nextDuration;
+      }
+      if (updates.trimStartFrame !== undefined) {
+        partial.trimStartFrame = Math.max(0, nextTrimStart);
+      }
+
+      if (Object.keys(partial).length > 0) {
+        updateClip(selectedClipId, partial);
       }
     },
-    [timelineTracks],
+    [project.tracks, selectedClipId, selectedTrackId, updateClip],
   );
 
   // Keyboard shortcuts
@@ -291,18 +315,13 @@ const Home: NextPage = () => {
           <InspectorPanel
             selectedClip={selectedClip}
             fps={compositionPreviewConfig.fps}
-            onClipUpdate={(updates) => {
-              if (selectedClip) {
-                setSelectedClip({ ...selectedClip, ...updates });
-              }
-            }}
+            onClipUpdate={handleInspectorClipUpdate}
           />
         }
         exportPanel={<ExportPanel />}
         extensionsPanel={<ExtensionsPanel />}
         timelinePanel={
           <TimelinePanel
-            tracks={timelineTracks}
             currentFrame={currentFrame}
             totalFrames={totalFrames}
             fps={compositionPreviewConfig.fps}

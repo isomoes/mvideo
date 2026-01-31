@@ -38,7 +38,7 @@ export const TimelinePanel = ({
   onClipSelect,
   onZoomChange,
 }: TimelinePanelProps) => {
-  const { project, updateClip, addAsset } = useProjectStore();
+  const { project, updateClip, addAsset, addTrack, addClip } = useProjectStore();
 
   const handleUpdateClip = (clipId: string, partial: any) => {
     updateClip(clipId, partial);
@@ -69,12 +69,12 @@ export const TimelinePanel = ({
         return;
       }
 
-      if (project.assets.some((asset) => asset.id === payload.record.id)) {
-        return;
-      }
+      const assetAlreadyExists = project.assets.some(
+        (asset) => asset.id === payload.record.id,
+      );
 
       const durationSeconds = payload.record.metadata.durationSeconds;
-      const durationInFrames = durationSeconds
+      const assetDurationInFrames = durationSeconds
         ? Math.round(durationSeconds * project.fps)
         : undefined;
 
@@ -91,13 +91,49 @@ export const TimelinePanel = ({
         kind: payload.kind,
         src: `/api/assets/${payload.record.id}/source`,
         name: payload.record.originalName,
-        durationInFrames,
+        durationInFrames: assetDurationInFrames,
         meta: Object.keys(meta).length ? meta : undefined,
       };
 
-      addAsset(asset);
+      if (!assetAlreadyExists) {
+        addAsset(asset);
+      }
+
+      const trackKind: "video" | "audio" | "overlay" =
+        payload.kind === "audio"
+          ? "audio"
+          : payload.kind === "video"
+            ? "video"
+            : "overlay";
+
+      let track = project.tracks.find((value) => value.kind === trackKind);
+      if (!track) {
+        const trackId = globalThis.crypto?.randomUUID?.() ?? `track-${Date.now()}`;
+        track = {
+          id: trackId,
+          name: `${trackKind[0]?.toUpperCase()}${trackKind.slice(1)} Track`,
+          kind: trackKind,
+          clips: [],
+        };
+        addTrack(track);
+      }
+
+      const clipId = globalThis.crypto?.randomUUID?.() ?? `clip-${Date.now()}`;
+      const startFrame = Math.min(currentFrame, Math.max(0, project.durationInFrames - 1));
+      const rawDuration = asset.durationInFrames ?? Math.round(project.fps * 5);
+      const maxDuration = Math.max(1, project.durationInFrames - startFrame);
+      const clipDurationInFrames = Math.max(1, Math.min(rawDuration, maxDuration));
+
+      addClip(track.id, {
+        id: clipId,
+        assetId: asset.id,
+        trackId: track.id,
+        startFrame,
+        durationInFrames: clipDurationInFrames,
+        trimStartFrame: 0,
+      });
     },
-    [addAsset, project.assets, project.fps]
+    [addAsset, addClip, addTrack, currentFrame, project.assets, project.durationInFrames, project.fps, project.tracks]
   );
 
   return (

@@ -1,30 +1,75 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 interface WaveformProps {
+  assetId?: string;
   durationInFrames: number;
   pixelsPerFrame: number;
   color?: string;
 }
 
 export const Waveform: React.FC<WaveformProps> = ({
+  assetId,
   durationInFrames,
   pixelsPerFrame,
   color = "rgba(255, 255, 255, 0.3)",
 }) => {
   const width = durationInFrames * pixelsPerFrame;
-  
-  const points = useMemo(() => {
-    const numPoints = Math.floor(width / 2);
-    const result: number[] = [];
-    for (let i = 0; i < numPoints; i++) {
-      result.push(Math.random() * 0.8 + 0.1);
-    }
-    return result;
-  }, [width]);
+  const [peaks, setPeaks] = useState<number[] | null>(null);
 
-  if (width < 10) return null;
+  useEffect(() => {
+    let cancelled = false;
+    if (!assetId) {
+      setPeaks(null);
+      return undefined;
+    }
+
+    const loadWaveform = async () => {
+      try {
+        const response = await fetch(`/api/assets/${assetId}/waveform`);
+        if (!response.ok) {
+          if (!cancelled) {
+            setPeaks(null);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as { peaks?: number[] };
+        if (!cancelled) {
+          setPeaks(Array.isArray(payload.peaks) ? payload.peaks : null);
+        }
+      } catch {
+        if (!cancelled) {
+          setPeaks(null);
+        }
+      }
+    };
+
+    void loadWaveform();
+    return () => {
+      cancelled = true;
+    };
+  }, [assetId]);
+
+  const points = useMemo(() => {
+    if (!peaks || peaks.length === 0) {
+      return null;
+    }
+
+    const numPoints = Math.floor(width / 2);
+    if (numPoints <= 0) {
+      return null;
+    }
+
+    const stride = peaks.length / numPoints;
+    return Array.from({ length: numPoints }, (_unused, index) => {
+      const sampleIndex = Math.min(peaks.length - 1, Math.floor(index * stride));
+      return peaks[sampleIndex] ?? 0;
+    });
+  }, [peaks, width]);
+
+  if (width < 10 || !points) return null;
 
   return (
     <div className="absolute inset-0 flex items-center pointer-events-none overflow-hidden">

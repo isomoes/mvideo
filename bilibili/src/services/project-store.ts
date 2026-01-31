@@ -12,6 +12,9 @@ type ProjectState = {
   addClip: (trackId: string, clip: Clip) => void;
   updateClip: (clipId: string, partial: Partial<Clip>) => void;
   removeClip: (clipId: string) => void;
+  loadProject: (projectId: string) => Promise<Project>;
+  saveProject: (project?: Project) => Promise<Project>;
+  listProjects: () => Promise<Project[]>;
 };
 
 const touchProject = (project: Project): Project => {
@@ -21,7 +24,7 @@ const touchProject = (project: Project): Project => {
   };
 };
 
-export const useProjectStore = create<ProjectState>((set) => ({
+export const useProjectStore = create<ProjectState>((set, get) => ({
   project: createEmptyProject(),
   setProject: (project) => {
     set({ project });
@@ -93,4 +96,36 @@ export const useProjectStore = create<ProjectState>((set) => ({
         })),
       }),
     })),
+  loadProject: async (projectId) => {
+    const response = await fetch(`/api/projects/${projectId}`);
+    const payload = await response.json();
+    if (!response.ok || payload.type !== "success") {
+      throw new Error(payload.message ?? "Failed to load project.");
+    }
+    set({ project: payload.data });
+    void runOnProjectLoaded(payload.data);
+    return payload.data;
+  },
+  saveProject: async (projectOverride) => {
+    const target = projectOverride ?? get().project;
+    const response = await fetch(`/api/projects/${target.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(target),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.type !== "success") {
+      throw new Error(payload.message ?? "Failed to save project.");
+    }
+    set({ project: payload.data });
+    return payload.data;
+  },
+  listProjects: async () => {
+    const response = await fetch("/api/projects");
+    const payload = await response.json();
+    if (!response.ok || payload.type !== "success") {
+      throw new Error(payload.message ?? "Failed to load projects.");
+    }
+    return payload.data ?? [];
+  },
 }));
