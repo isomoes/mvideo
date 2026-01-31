@@ -110,6 +110,23 @@ export const Timeline: React.FC<TimelineProps> = ({
     [onAssetDrop]
   );
 
+  const handleWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (!onZoomChange || !event.ctrlKey) {
+        return;
+      }
+
+      event.preventDefault();
+      const step = event.deltaY > 0 ? -10 : 10;
+      const nextZoom = Math.min(maxZoom, Math.max(minZoom, zoom + step));
+
+      if (nextZoom !== zoom) {
+        onZoomChange(nextZoom);
+      }
+    },
+    [maxZoom, minZoom, onZoomChange, zoom]
+  );
+
   useEffect(() => {
     const element = timelineRef.current;
     if (!element) return;
@@ -206,6 +223,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         className="flex-1 overflow-auto studio-scrollbar relative"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
+        onWheel={handleWheel}
       >
         <div
           className="relative"
