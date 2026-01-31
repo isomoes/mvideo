@@ -56,6 +56,16 @@ const ChevronRightIcon = () => (
   </svg>
 );
 
+const TrashIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M3 6h18" />
+    <path d="M8 6V4h8v2" />
+    <path d="M6 6l1 14h10l1-14" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+  </svg>
+);
+
 type AssetType = "video" | "audio" | "image" | "text";
 
 type AudioTrackInfo = {
@@ -248,6 +258,29 @@ export const ResourcesPanel = ({ onAssetSelect, onAssetDragStart }: ResourcesPan
       setIsLoading(false);
     }
   }, []);
+
+  const deleteAsset = useCallback(
+    async (assetId: string) => {
+      setErrorMessage(null);
+
+      try {
+        const response = await fetch(`/api/assets/${assetId}`, {
+          method: "DELETE",
+        });
+        const payload = await response.json();
+
+        if (!response.ok || payload.type !== "success") {
+          throw new Error(payload.message ?? "Failed to delete asset.");
+        }
+
+        setAssetRecords((prev) => prev.filter((record) => record.id !== assetId));
+        setSelectedAsset((prev) => (prev === assetId ? null : prev));
+      } catch (error) {
+        setErrorMessage((error as Error).message);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     void loadAssets();
@@ -448,6 +481,18 @@ export const ResourcesPanel = ({ onAssetSelect, onAssetDragStart }: ResourcesPan
                         {asset.sizeLabel && <span>{asset.sizeLabel}</span>}
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      className="shrink-0 p-1 text-studio-text-muted hover:text-studio-warning hover:bg-studio-border rounded transition-colors"
+                      title="Delete asset"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void deleteAsset(asset.id);
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
+                      <TrashIcon />
+                    </button>
                   </div>
                 ))}
               </div>

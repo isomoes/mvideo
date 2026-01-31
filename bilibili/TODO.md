@@ -133,10 +133,10 @@ Based on [ARCH.md](./ARCH.md)
 
 ### 5.1 Resources Panel Integration (Requires 2.1 + 4.1)
 
-- [ ] Connect ResourcesPanel to `/api/assets` endpoint (currently uses hardcoded demo data)
-- [ ] Implement file upload via Import button -> `/api/ingestion/import`
-- [ ] Display actual asset thumbnails from derived assets
-- [ ] Show real asset metadata (duration, size) from Asset records
+- [x] Connect ResourcesPanel to `/api/assets` endpoint (currently uses hardcoded demo data)
+- [x] Implement file upload via Import button -> `/api/ingestion/import`
+- [x] Display actual asset thumbnails from derived assets
+- [x] Show real asset metadata (duration, size) from Asset records
 - [ ] Add asset to project store when dragged to timeline
 
 ### 5.2 Timeline Integration (Requires 5.1)
