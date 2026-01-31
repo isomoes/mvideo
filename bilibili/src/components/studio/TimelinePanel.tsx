@@ -42,6 +42,27 @@ export const TimelinePanel = ({
 
   const handleUpdateClip = (clipId: string, partial: any) => {
     updateClip(clipId, partial);
+    
+    // Calculate if timeline needs to be extended
+    // Find the clip being updated
+    let updatedClip = null;
+    for (const track of project.tracks) {
+      const clip = track.clips.find(c => c.id === clipId);
+      if (clip) {
+        updatedClip = { ...clip, ...partial };
+        break;
+      }
+    }
+    
+    if (updatedClip) {
+      const clipEndFrame = updatedClip.startFrame + updatedClip.durationInFrames;
+      const currentDuration = project.durationInFrames ?? 0;
+      if (clipEndFrame > currentDuration) {
+        updateProject({
+          durationInFrames: clipEndFrame,
+        });
+      }
+    }
   };
 
   const handleSelectClip = (clipId: string, trackId: string) => {
@@ -148,6 +169,15 @@ export const TimelinePanel = ({
         durationInFrames: clipDurationInFrames,
         trimStartFrame: 0,
       });
+
+      // Extend timeline duration if the new clip goes beyond current duration
+      const clipEndFrame = startFrame + clipDurationInFrames;
+      const currentDuration = project.durationInFrames ?? 0;
+      if (clipEndFrame > currentDuration) {
+        updateProject({
+          durationInFrames: clipEndFrame,
+        });
+      }
     },
     [addAsset, addClip, addTrack, updateProject, currentFrame, project.assets, project.durationInFrames, project.fps, project.tracks]
   );
