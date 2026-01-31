@@ -23,10 +23,11 @@ const getContentType = (filePath: string) => {
 
 export const GET = async (
   _req: Request,
-  { params }: { params: { id: string; index: string } },
+  { params }: { params: Promise<{ id: string; index: string }> },
 ) => {
   try {
-    const record = await readAssetRecord(params.id);
+    const { id, index } = await params;
+    const record = await readAssetRecord(id);
     if (!record?.derived?.thumbnailPaths?.length) {
       return NextResponse.json(
         { type: "error", message: "Thumbnails not found" },
@@ -34,15 +35,15 @@ export const GET = async (
       );
     }
 
-    const index = Number.parseInt(params.index, 10);
-    if (!Number.isFinite(index) || index < 0 || index >= record.derived.thumbnailPaths.length) {
+    const thumbnailIndex = Number.parseInt(index, 10);
+    if (!Number.isFinite(thumbnailIndex) || thumbnailIndex < 0 || thumbnailIndex >= record.derived.thumbnailPaths.length) {
       return NextResponse.json(
         { type: "error", message: "Thumbnail index out of range" },
         { status: 400 },
       );
     }
 
-    const thumbnailPath = record.derived.thumbnailPaths[index];
+    const thumbnailPath = record.derived.thumbnailPaths[thumbnailIndex];
     const buffer = await fs.readFile(thumbnailPath);
     return new NextResponse(buffer, {
       headers: {

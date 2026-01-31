@@ -37,10 +37,11 @@ const getContentType = (filePath: string) => {
 
 export const GET = async (
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
   try {
-    const record = await readAssetRecord(params.id);
+    const { id } = await params;
+    const record = await readAssetRecord(id);
     if (!record) {
       return NextResponse.json(
         { type: "error", message: "Asset not found" },
