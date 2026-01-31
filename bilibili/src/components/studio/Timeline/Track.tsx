@@ -15,7 +15,7 @@ interface TrackProps {
   snapPoints?: number[];
   onClipSelect: (clipId: string) => void;
   onClipMove: (clipId: string, newStart: number) => void;
-  onClipTrim: (clipId: string, newStart: number, newDuration: number) => void;
+  onClipTrim: (clipId: string, newStart: number, newDuration: number, newTrimStart?: number) => void;
   onTrackMute?: (trackId: string) => void;
   onTrackLock?: (trackId: string) => void;
   onTrackVisibility?: (trackId: string) => void;
@@ -144,7 +144,7 @@ export const Track: React.FC<TrackProps> = ({
             isAudio={track.kind === "audio"}
             onSelect={() => onClipSelect(clip.id)}
             onMove={(newStart) => onClipMove(clip.id, newStart)}
-            onTrim={(newStart, newDuration) => onClipTrim(clip.id, newStart, newDuration)}
+            onTrim={(newStart, newDuration, newTrimStart) => onClipTrim(clip.id, newStart, newDuration, newTrimStart)}
             color={getTrackColor(track.kind)}
             label={assetsById.get(clip.assetId)?.name ?? clip.id}
           />

@@ -11,7 +11,7 @@ interface ClipProps {
   isSelected: boolean;
   onSelect: () => void;
   onMove: (newStart: number) => void;
-  onTrim: (newStart: number, newDuration: number) => void;
+  onTrim: (newStart: number, newDuration: number, newTrimStart?: number) => void;
   color?: string;
   label?: string;
   snapEnabled?: boolean;
@@ -39,6 +39,7 @@ export const Clip: React.FC<ClipProps> = ({
   const startXRef = useRef(0);
   const startFrameRef = useRef(0);
   const startDurationRef = useRef(0);
+  const startTrimRef = useRef(0);
 
   const getSnappedFrame = (frame: number, threshold = 10) => {
     if (!snapEnabled) return frame;
@@ -64,6 +65,7 @@ export const Clip: React.FC<ClipProps> = ({
     startXRef.current = e.clientX;
     startFrameRef.current = clip.startFrame;
     startDurationRef.current = clip.durationInFrames;
+    startTrimRef.current = clip.trimStartFrame ?? 0;
 
     if (type === "move") setIsDragging(true);
     else if (type === "trim-start") setIsTrimmingStart(true);
@@ -77,15 +79,12 @@ export const Clip: React.FC<ClipProps> = ({
         const newStart = getSnappedFrame(Math.max(0, startFrameRef.current + deltaFrames));
         onMove(newStart);
       } else if (type === "trim-start") {
-        const newStart = getSnappedFrame(Math.max(0, startFrameRef.current + deltaFrames));
-        const newDuration = Math.max(1, startDurationRef.current - (newStart - startFrameRef.current));
-        if (newDuration > 1) {
-          onTrim(newStart, newDuration);
-        }
+        const newTrimStart = Math.max(0, Math.min(startTrimRef.current + deltaFrames, startDurationRef.current - 1));
+        onTrim(startFrameRef.current, startDurationRef.current, newTrimStart);
       } else if (type === "trim-end") {
         const newEnd = getSnappedFrame(startFrameRef.current + startDurationRef.current + deltaFrames);
         const newDuration = Math.max(1, newEnd - startFrameRef.current);
-        onTrim(startFrameRef.current, newDuration);
+        onTrim(startFrameRef.current, newDuration, clip.trimStartFrame);
       }
     };
 
@@ -156,7 +155,8 @@ export const Clip: React.FC<ClipProps> = ({
       
       {/* Trim handles - more visible */}
       <div
-        className={`absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/50 transition-colors z-20 ${isTrimmingStart ? "bg-white/70" : ""}`}
+        className={`absolute top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/50 transition-colors z-20 ${isTrimmingStart ? "bg-white/70" : ""}`}
+        style={{ left: trimStart * pixelsPerFrame }}
         onPointerDown={(e) => handlePointerDown(e, "trim-start")}
         title="Drag to trim start"
       >

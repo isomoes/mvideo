@@ -90,10 +90,12 @@ export const Timeline: React.FC<TimelineProps> = ({
     clipId: string,
     newStart: number,
     newDuration: number,
+    newTrimStart?: number,
   ) => {
     onUpdateClip(clipId, {
       startFrame: newStart,
       durationInFrames: newDuration,
+      trimStartFrame: newTrimStart,
     });
   };
 
