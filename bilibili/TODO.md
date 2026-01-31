@@ -58,7 +58,7 @@ Based on [ARCH.md](./ARCH.md)
 - [x] Design artifact storage structure (source, trimmed, proxy, waveform)
 - [x] Implement asset CRUD operations
 - [x] Add derived asset linking (source -> trimmed -> proxy)
-- [x] Implement media cache for reusing derived assets
+- [ ] Implement media cache for reusing derived assets (Removed)
 
 ## Phase 3: Remotion Compositions (Can start parallel to Phase 2)
 

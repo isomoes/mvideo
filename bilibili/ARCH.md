@@ -149,7 +149,6 @@ Plugins add non-core features without changing core flow.
 
 ## Operational Concerns
 - Deterministic rendering: use fixed composition versions and inputs
-- Media cache: reuse derived assets to avoid reprocessing
 - Observability: log pipeline steps and render durations
 
 ## Milestones

@@ -23,7 +23,6 @@ export type DerivedAssetRecord = {
   waveformPath?: string;
   thumbnailsDir?: string;
   thumbnailPaths?: string[];
-  cacheKey?: string;
   links?: {
     sourcePath?: string;
     trimmedVideoPath?: string;
@@ -65,18 +64,6 @@ export const getAssetDerivedPath = (assetId: string, filename: string): string =
 
 export const getAssetRecordPath = (assetId: string): string => {
   return path.join(getAssetDir(assetId), "asset.json");
-};
-
-export const getCacheRoot = (): string => {
-  return path.join(getStorageRoot(), "cache");
-};
-
-export const getCacheEntryDir = (cacheKey: string): string => {
-  return path.join(getCacheRoot(), cacheKey);
-};
-
-export const getCacheEntryPath = (cacheKey: string, filename: string): string => {
-  return path.join(getCacheEntryDir(cacheKey), filename);
 };
 
 export const ensureDir = async (dirPath: string): Promise<void> => {

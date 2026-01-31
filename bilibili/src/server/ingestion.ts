@@ -1,11 +1,16 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { randomUUID, createHash } from "crypto";
+import { randomUUID } from "crypto";
 import { logger } from "../helpers/logger";
 import {
+  buildNormalizeAudioCommand,
+  buildProxyCommand,
+  buildTrimCommand,
+  buildWaveformCommand,
   ensureFfmpegAvailable,
   generateThumbnails,
   probeMedia,
+  runFfmpegCommand,
 } from "./ffmpeg";
 import {
   AssetRecord,
@@ -67,6 +72,13 @@ const extractMetadata = async (sourcePath: string): Promise<MediaMetadata> => {
   };
 };
 
+const computeProxyWidth = (sourceWidth: number | null): number => {
+  const width = sourceWidth ?? 1280;
+  const scaled = Math.round(width / 2);
+  const clamped = Math.min(960, Math.max(480, scaled));
+  return clamped % 2 === 0 ? clamped : clamped - 1;
+};
+
 const computeThumbnailCount = (durationSeconds: number | null): number => {
   if (!durationSeconds || durationSeconds <= 0) {
     return 8;
@@ -75,54 +87,170 @@ const computeThumbnailCount = (durationSeconds: number | null): number => {
   return Math.min(24, Math.max(8, Math.round(durationSeconds / 5)));
 };
 
-const hashBuffer = (buffer: Buffer): string => {
-  return createHash("sha256").update(buffer).digest("hex");
-};
+const computeWaveformPoints = (durationSeconds: number | null): number => {
+  if (!durationSeconds || durationSeconds <= 0) {
+    return 800;
+  }
 
-const hashString = (value: string): string => {
-  return createHash("sha256").update(value).digest("hex");
+  return Math.min(2000, Math.max(600, Math.round(durationSeconds * 40)));
 };
 
 const listThumbnailPaths = async (thumbnailsDir: string): Promise<string[]> => {
-  const entries = await fs.readdir(thumbnailsDir);
-  return entries
-    .filter((entry) => entry.toLowerCase().endsWith(".jpg"))
-    .map((entry) => path.join(thumbnailsDir, entry))
-    .sort();
+  try {
+    const entries = await fs.readdir(thumbnailsDir);
+    return entries
+      .filter((entry) => entry.toLowerCase().endsWith(".jpg"))
+      .map((entry) => path.join(thumbnailsDir, entry))
+      .sort();
+  } catch {
+    return [];
+  }
+};
+
+const createWaveformData = async (options: {
+  inputPath: string;
+  outputPath: string;
+  points: number;
+  sampleRate: number;
+}): Promise<void> => {
+  const rawPath = options.outputPath.replace(/\.json$/, ".pcm");
+  const waveformCommand = buildWaveformCommand({
+    inputPath: options.inputPath,
+    outputPath: rawPath,
+    sampleRate: options.sampleRate,
+    channels: 1,
+    format: "s16le",
+  });
+
+  await runFfmpegCommand(waveformCommand);
+
+  const buffer = await fs.readFile(rawPath);
+  const samples = new Int16Array(
+    buffer.buffer,
+    buffer.byteOffset,
+    Math.floor(buffer.byteLength / 2),
+  );
+
+  const bucketCount = samples.length
+    ? Math.min(options.points, samples.length)
+    : 0;
+  const bucketSize = bucketCount
+    ? Math.max(1, Math.floor(samples.length / bucketCount))
+    : 0;
+  const peaks: number[] = [];
+
+  for (let bucket = 0; bucket < bucketCount; bucket += 1) {
+    const start = bucket * bucketSize;
+    const end = Math.min(samples.length, start + bucketSize);
+    let max = 0;
+    for (let i = start; i < end; i += 1) {
+      const value = Math.abs(samples[i] ?? 0);
+      if (value > max) {
+        max = value;
+      }
+    }
+    peaks.push(max / 32768);
+  }
+
+  const waveformPayload = {
+    sampleRate: options.sampleRate,
+    points: peaks.length,
+    peaks,
+  };
+
+  await fs.writeFile(options.outputPath, JSON.stringify(waveformPayload, null, 2));
+  await fs.unlink(rawPath).catch(() => undefined);
 };
 
 const processDerivedAssets = async (
   record: AssetRecord,
-  sourceHash: string,
 ): Promise<DerivedAssetRecord> => {
   const derivedDir = getAssetDerivedDir(record.id);
   await ensureDir(derivedDir);
 
-  const thumbnailCount = computeThumbnailCount(record.metadata.durationSeconds);
+  const trimmedPath = path.join(derivedDir, "trimmed.mp4");
+  const normalizedAudioPath = path.join(derivedDir, "normalized.wav");
+  const proxyPath = path.join(derivedDir, "proxy.mp4");
+  const waveformPath = path.join(derivedDir, "waveform.json");
   const thumbnailsDir = path.join(derivedDir, "thumbnails");
-  const hasVisualTrack = Boolean(record.metadata.width && record.metadata.height);
 
-  if (hasVisualTrack) {
-    await logger.trackDuration("generate-thumbnails", async () => {
-      await ensureDir(thumbnailsDir);
-      await generateThumbnails({
-        inputPath: record.sourcePath,
-        outputDir: thumbnailsDir,
-        count: thumbnailCount,
-        width: 320,
-      });
-    }, { assetId: record.id });
-  }
+  const proxyWidth = computeProxyWidth(record.metadata.width);
+  const thumbnailCount = computeThumbnailCount(record.metadata.durationSeconds);
+  const waveformPoints = computeWaveformPoints(record.metadata.durationSeconds);
+  const waveformSampleRate = record.metadata.audioTracks[0]?.sampleRate ?? 44100;
 
-  const thumbnailPaths = await listThumbnailPaths(thumbnailsDir).catch(() => []);
-  const cacheKey = hashString(`${sourceHash}:${thumbnailCount}`);
+  logger.info("Processing derived assets", { assetId: record.id });
+
+  await logger.trackDuration("ffmpeg-trim", async () => {
+    const trimCommand = buildTrimCommand({
+      inputPath: record.sourcePath,
+      outputPath: trimmedPath,
+      startTime: 0,
+      videoCodec: "libx264",
+      audioCodec: "aac",
+      format: "mp4",
+    });
+    await runFfmpegCommand(trimCommand);
+  }, { assetId: record.id });
+
+  await logger.trackDuration("ffmpeg-normalize", async () => {
+    const normalizeCommand = buildNormalizeAudioCommand({
+      inputPath: trimmedPath,
+      outputPath: normalizedAudioPath,
+      format: "wav",
+      targetLufs: -16,
+      truePeak: -1.5,
+      loudnessRange: 11,
+    });
+    await runFfmpegCommand(normalizeCommand);
+  }, { assetId: record.id });
+
+  await logger.trackDuration("ffmpeg-proxy", async () => {
+    const proxyCommand = buildProxyCommand({
+      inputPath: trimmedPath,
+      outputPath: proxyPath,
+      width: proxyWidth,
+      fps: record.metadata.fps ?? undefined,
+      videoBitrate: "1800k",
+      audioBitrate: "128k",
+      format: "mp4",
+    });
+    proxyCommand.videoCodec("libx264").audioCodec("aac");
+    await runFfmpegCommand(proxyCommand);
+  }, { assetId: record.id });
+
+  await logger.trackDuration("generate-thumbnails", async () => {
+    await ensureDir(thumbnailsDir);
+    await generateThumbnails({
+      inputPath: trimmedPath,
+      outputDir: thumbnailsDir,
+      count: thumbnailCount,
+      width: 320,
+    });
+  }, { assetId: record.id });
+
+  await logger.trackDuration("create-waveform", async () => {
+    await createWaveformData({
+      inputPath: normalizedAudioPath,
+      outputPath: waveformPath,
+      points: waveformPoints,
+      sampleRate: waveformSampleRate,
+    });
+  }, { assetId: record.id });
+
+  const thumbnailPaths = await listThumbnailPaths(thumbnailsDir);
 
   return {
+    trimmedVideoPath: trimmedPath,
+    normalizedAudioPath,
+    proxyVideoPath: proxyPath,
+    waveformPath,
     thumbnailsDir,
     thumbnailPaths,
-    cacheKey,
     links: {
       sourcePath: record.sourcePath,
+      trimmedVideoPath: trimmedPath,
+      proxyVideoPath: proxyPath,
     },
   };
 };
@@ -134,7 +262,6 @@ export const ingestUploadedFile = async (file: File): Promise<AssetRecord> => {
     const buffer = Buffer.from(await file.arrayBuffer());
     const sourcePath = await writeAssetSource(assetId, originalName, buffer);
     const metadata = await extractMetadata(sourcePath);
-    const sourceHash = hashBuffer(buffer);
 
     const record: AssetRecord = {
       id: assetId,
@@ -146,7 +273,7 @@ export const ingestUploadedFile = async (file: File): Promise<AssetRecord> => {
     };
 
     await ensureFfmpegAvailable();
-    const derived = await processDerivedAssets(record, sourceHash);
+    const derived = await processDerivedAssets(record);
     const updatedRecord = { ...record, derived };
 
     await writeAssetRecord(updatedRecord);
