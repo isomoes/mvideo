@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Asset, Clip, Project, Track } from "../../types/models";
+import { VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS, FINAL_DURATION_IN_FRAMES } from "../../types/constants";
 import { createEmptyProject } from "./project-serialization";
 import { runOnProjectLoaded } from "./plugins";
 
@@ -31,6 +32,39 @@ const touchProject = (project: Project): Project => {
   };
 };
 
+/**
+ * Recalculates project duration based on all clips in the timeline.
+ * Returns the maximum end frame across all clips, or the default duration if no clips exist.
+ */
+const recalculateProjectDuration = (project: Project): number => {
+  let maxEndFrame = 0;
+  
+  for (const track of project.tracks) {
+    for (const clip of track.clips) {
+      const clipEndFrame = clip.startFrame + clip.durationInFrames;
+      if (clipEndFrame > maxEndFrame) {
+        maxEndFrame = clipEndFrame;
+      }
+    }
+  }
+  
+  // If no clips, use the default duration, otherwise add some padding (e.g., 150 frames = 5 seconds at 30fps)
+  return maxEndFrame > 0 ? maxEndFrame + 150 : FINAL_DURATION_IN_FRAMES;
+};
+
+/**
+ * Updates project settings based on timeline content.
+ * Recalculates duration when clips are modified.
+ */
+const syncProjectSettings = (project: Project): Project => {
+  const newDuration = recalculateProjectDuration(project);
+  
+  return {
+    ...project,
+    durationInFrames: newDuration,
+  };
+};
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   project: createEmptyProject(),
   isDirty: false,
@@ -54,9 +88,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       schemaVersion: 1,
       id: projectId,
       name: config.name || "Untitled Project",
-      width: 1280,
-      height: 720,
-      fps: 30,
+      width: VIDEO_WIDTH,
+      height: VIDEO_HEIGHT,
+      fps: VIDEO_FPS,
+      durationInFrames: FINAL_DURATION_IN_FRAMES,
       assets: [],
       tracks: [],
       createdAt: now,
@@ -149,9 +184,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }),
     })),
   addClip: (trackId, clip) =>
-    set((state) => ({
-      isDirty: true,
-      project: touchProject({
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         tracks: state.project.tracks.map((track) => {
           if (track.id !== trackId) {
@@ -163,12 +197,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
             clips: [...track.clips, clip],
           };
         }),
-      }),
-    })),
+      };
+      
+      return {
+        isDirty: true,
+        project: touchProject(syncProjectSettings(updatedProject)),
+      };
+    }),
   updateClip: (clipId, partial) =>
-    set((state) => ({
-      isDirty: true,
-      project: touchProject({
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         tracks: state.project.tracks.map((track) => ({
           ...track,
@@ -183,19 +221,28 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
             };
           }),
         })),
-      }),
-    })),
+      };
+      
+      return {
+        isDirty: true,
+        project: touchProject(syncProjectSettings(updatedProject)),
+      };
+    }),
   removeClip: (clipId) =>
-    set((state) => ({
-      isDirty: true,
-      project: touchProject({
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         tracks: state.project.tracks.map((track) => ({
           ...track,
           clips: track.clips.filter((clip) => clip.id !== clipId),
         })),
-      }),
-    })),
+      };
+      
+      return {
+        isDirty: true,
+        project: touchProject(syncProjectSettings(updatedProject)),
+      };
+    }),
   loadProject: async (projectId) => {
     const response = await fetch(`/api/projects/${projectId}`);
     const payload = await response.json();

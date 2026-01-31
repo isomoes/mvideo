@@ -15,6 +15,7 @@ type AssetDragPayload = {
       durationSeconds: number | null;
       width: number | null;
       height: number | null;
+      fps: number | null;
     };
   };
 };
@@ -106,6 +107,9 @@ export const TimelinePanel = ({
       if (payload.record.metadata.height) {
         meta.height = payload.record.metadata.height;
       }
+      if (payload.record.metadata.fps) {
+        meta.fps = payload.record.metadata.fps;
+      }
 
       const asset: Asset = {
         id: payload.record.id,
@@ -120,7 +124,7 @@ export const TimelinePanel = ({
         addAsset(asset);
       }
 
-      // If this is the first video being added to the timeline, update project dimensions
+      // If this is the first video being added to the timeline, update project dimensions and FPS
       const trackKind: "video" | "audio" | "overlay" =
         payload.kind === "audio"
           ? "audio"
@@ -138,10 +142,17 @@ export const TimelinePanel = ({
         payload.record.metadata.width &&
         payload.record.metadata.height
       ) {
-        updateProject({
+        const projectUpdate: Partial<typeof project> = {
           width: payload.record.metadata.width,
           height: payload.record.metadata.height,
-        });
+        };
+        
+        // Also update FPS if available and different from current
+        if (payload.record.metadata.fps && payload.record.metadata.fps !== project.fps) {
+          projectUpdate.fps = payload.record.metadata.fps;
+        }
+        
+        updateProject(projectUpdate);
       }
 
       let track = project.tracks.find((value) => value.kind === trackKind);

@@ -1,4 +1,5 @@
 import { ProjectSchema, type Project } from "../../types/models";
+import { VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS, FINAL_DURATION_IN_FRAMES } from "../../types/constants";
 
 const generateProjectId = () => {
   const cryptoRef = globalThis.crypto;
@@ -16,9 +17,10 @@ export const createEmptyProject = (overrides: Partial<Project> = {}) => {
     schemaVersion: 1,
     id: generateProjectId(),
     name: "Untitled Project",
-    width: 1280,
-    height: 720,
-    fps: 30,
+    width: VIDEO_WIDTH,
+    height: VIDEO_HEIGHT,
+    fps: VIDEO_FPS,
+    durationInFrames: FINAL_DURATION_IN_FRAMES,
     assets: [],
     tracks: [],
     createdAt: now,

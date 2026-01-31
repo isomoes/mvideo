@@ -30,7 +30,8 @@ const clampFrame = (frame: number, totalFrames: number) =>
 
 const Home: NextPage = () => {
   const [text] = useState<string>(defaultMyCompProps.title);
-  const totalFrames = compositionPreviewConfig.durationInFrames;
+  const { project, isDirty, updateClip, updateProject, createProject, loadProject, saveProject, listProjects } = useProjectStore();
+  const totalFrames = project.durationInFrames ?? compositionPreviewConfig.durationInFrames;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [snapEnabled, setSnapEnabled] = useState(true);
@@ -40,7 +41,6 @@ const Home: NextPage = () => {
     "select",
   );
   const { toggleKeymaps } = useUIStore();
-  const { project, isDirty, updateClip, updateProject, createProject, loadProject, saveProject, listProjects } = useProjectStore();
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [isProjectReady, setIsProjectReady] = useState(false);
@@ -90,16 +90,26 @@ const Home: NextPage = () => {
     };
   }, [listProjects, loadProject]);
 
+  // Initialize project settings from composition config only if project has default/uninitialized values
   useEffect(() => {
-    if (project.durationInFrames !== totalFrames || project.fps !== compositionPreviewConfig.fps || project.width !== compositionPreviewConfig.width || project.height !== compositionPreviewConfig.height) {
-      updateProject({
-        durationInFrames: totalFrames,
-        fps: compositionPreviewConfig.fps,
-        width: compositionPreviewConfig.width,
-        height: compositionPreviewConfig.height,
-      });
+    // Only sync on initial load if project has no tracks/clips (empty project)
+    if (isProjectReady && project.tracks.length === 0 && project.assets.length === 0) {
+      const needsInit = 
+        project.durationInFrames === undefined ||
+        project.fps === undefined ||
+        project.width === undefined ||
+        project.height === undefined;
+      
+      if (needsInit) {
+        updateProject({
+          durationInFrames: totalFrames,
+          fps: compositionPreviewConfig.fps,
+          width: compositionPreviewConfig.width,
+          height: compositionPreviewConfig.height,
+        });
+      }
     }
-  }, [compositionPreviewConfig.fps, compositionPreviewConfig.height, compositionPreviewConfig.width, project.durationInFrames, project.fps, project.height, project.width, totalFrames, updateProject]);
+  }, [isProjectReady]); // Only run when project becomes ready
 
   useEffect(() => {
     if (!isProjectReady || !isDirty) {
@@ -282,7 +292,7 @@ const Home: NextPage = () => {
             zoom={zoom}
             currentFrame={currentFrame}
             totalFrames={totalFrames}
-            fps={compositionPreviewConfig.fps}
+            fps={project.fps}
             activeTool={activeTool}
             onNewProject={() => setShowNewProjectModal(true)}
             onTogglePlay={handleTogglePlay}
@@ -310,10 +320,10 @@ const Home: NextPage = () => {
           <PreviewPlayer
             component={compositionPreviewConfig.component}
             inputProps={inputProps}
-            durationInFrames={compositionPreviewConfig.durationInFrames}
-            fps={compositionPreviewConfig.fps}
-            width={compositionPreviewConfig.width}
-            height={compositionPreviewConfig.height}
+            durationInFrames={totalFrames}
+            fps={project.fps}
+            width={project.width}
+            height={project.height}
             currentFrame={currentFrame}
             isPlaying={isPlaying}
             onFrameChange={setCurrentFrame}
@@ -324,7 +334,7 @@ const Home: NextPage = () => {
         inspectorPanel={
           <InspectorPanel
             selectedClip={selectedClip}
-            fps={compositionPreviewConfig.fps}
+            fps={project.fps}
             onClipUpdate={handleInspectorClipUpdate}
           />
         }
@@ -334,7 +344,7 @@ const Home: NextPage = () => {
           <TimelinePanel
             currentFrame={currentFrame}
             totalFrames={totalFrames}
-            fps={compositionPreviewConfig.fps}
+            fps={project.fps}
             zoom={zoom}
             snapEnabled={snapEnabled}
             onSeek={seekToFrame}

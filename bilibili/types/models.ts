@@ -39,7 +39,7 @@ export const ProjectSchema = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   fps: z.number().int().positive(),
-  durationInFrames: z.number().int().nonnegative().optional(),
+  durationInFrames: z.number().int().nonnegative().default(1200),
   assets: z.array(AssetSchema),
   tracks: z.array(TrackSchema),
   intro: IntroCompositionProps.optional(),

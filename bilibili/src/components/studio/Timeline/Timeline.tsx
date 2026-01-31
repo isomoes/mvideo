@@ -47,13 +47,13 @@ export const Timeline: React.FC<TimelineProps> = ({
   // Calculate timeline width based on zoom
   // zoom 100% = 2 pixels per frame
   const pixelsPerFrame = (zoom / 100) * 2;
-  const timelineWidth = project.durationInFrames * pixelsPerFrame;
+  const timelineWidth = (project.durationInFrames ?? 1200) * pixelsPerFrame;
 
   const snapPoints = useMemo(() => {
     if (!snapEnabled) return [];
     const points = new Set<number>();
     points.add(0);
-    points.add(project.durationInFrames);
+    points.add(project.durationInFrames ?? 1200);
     points.add(currentFrame);
 
     project.tracks.forEach((track) => {
@@ -168,7 +168,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           }}
         >
           <Ruler
-            totalFrames={project.durationInFrames}
+            totalFrames={project.durationInFrames ?? 1200}
             fps={project.fps}
             pixelsPerFrame={pixelsPerFrame}
             headerWidth={TRACK_HEADER_WIDTH}
@@ -204,11 +204,11 @@ export const Timeline: React.FC<TimelineProps> = ({
 
       {/* Timeline Footer */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-studio-panel-header border-t border-studio-border shrink-0">
-        <div className="flex items-center gap-3 text-xs text-studio-text-muted">
-          <span>Frame: {currentFrame}</span>
-          <span className="text-studio-border">|</span>
-          <span>Time: {(currentFrame / project.fps).toFixed(2)}s</span>
-        </div>
+          <div className="flex items-center gap-3 text-xs text-studio-text-muted">
+            <span>{project.tracks.length} tracks</span>
+            <span className="text-studio-border">|</span>
+            <span>{project.durationInFrames ?? 1200} frames</span>
+          </div>
         <div className="flex items-center gap-2 text-xs text-studio-text-muted">
           <span>Drag clips to move • Use handles to trim</span>
         </div>
