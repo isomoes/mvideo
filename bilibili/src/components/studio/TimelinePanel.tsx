@@ -136,10 +136,9 @@ export const TimelinePanel = ({
       }
 
       const clipId = globalThis.crypto?.randomUUID?.() ?? `clip-${Date.now()}`;
-      const startFrame = Math.min(currentFrame, Math.max(0, project.durationInFrames - 1));
-      const rawDuration = asset.durationInFrames ?? Math.round(project.fps * 5);
-      const maxDuration = Math.max(1, project.durationInFrames - startFrame);
-      const clipDurationInFrames = Math.max(1, Math.min(rawDuration, maxDuration));
+      const startFrame = currentFrame;
+      // Use the asset's actual duration, not limited by project duration
+      const clipDurationInFrames = asset.durationInFrames ?? Math.round(project.fps * 5);
 
       addClip(track.id, {
         id: clipId,

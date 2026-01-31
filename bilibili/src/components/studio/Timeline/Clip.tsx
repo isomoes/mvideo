@@ -107,6 +107,9 @@ export const Clip: React.FC<ClipProps> = ({
       ? asset.src
       : undefined;
 
+  const trimStart = clip.trimStartFrame ?? 0;
+  const hasTrims = trimStart > 0;
+
   return (
     <div
       className={`absolute top-1 bottom-1 rounded cursor-pointer transition-shadow select-none overflow-hidden ${color} ${
@@ -136,21 +139,36 @@ export const Clip: React.FC<ClipProps> = ({
           pixelsPerFrame={pixelsPerFrame}
         />
       )}
+      
+      {/* Show trimmed region indicator */}
+      {hasTrims && (
+        <div className="absolute left-0 top-0 bottom-0 bg-black/40 pointer-events-none z-5" 
+             style={{ width: trimStart * pixelsPerFrame }} 
+             title={`Trimmed: ${trimStart} frames`}
+        />
+      )}
+      
       <div className="flex items-center h-full px-2 overflow-hidden pointer-events-none relative z-10">
         <span className="text-[11px] text-white font-medium truncate drop-shadow">
           {label || clip.id}
         </span>
       </div>
       
-      {/* Trim handles */}
+      {/* Trim handles - more visible */}
       <div
-        className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/30 rounded-l z-20"
+        className={`absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/50 transition-colors z-20 ${isTrimmingStart ? "bg-white/70" : ""}`}
         onPointerDown={(e) => handlePointerDown(e, "trim-start")}
-      />
+        title="Drag to trim start"
+      >
+        <div className="absolute inset-y-0 left-0 w-px bg-white/60" />
+      </div>
       <div
-        className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/30 rounded-r z-20"
+        className={`absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/50 transition-colors z-20 ${isTrimmingEnd ? "bg-white/70" : ""}`}
         onPointerDown={(e) => handlePointerDown(e, "trim-end")}
-      />
+        title="Drag to trim end"
+      >
+        <div className="absolute inset-y-0 right-0 w-px bg-white/60" />
+      </div>
     </div>
   );
 };

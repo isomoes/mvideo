@@ -431,34 +431,6 @@ export const InspectorPanel = ({ selectedClip, fps, onClipUpdate }: InspectorPan
               unit="f"
             />
           </PropertyRow>
-          <PropertyRow label="Trim In">
-            <div className="flex items-center gap-2">
-              <NumberInput
-                value={trimStartFrame}
-                onChange={(v) => onClipUpdate?.({ trimStartFrame: Math.max(0, v) })}
-                min={0}
-                max={Math.max(0, selectedClip.durationInFrames - 1)}
-                unit="f"
-              />
-              <span className="text-xs text-studio-text-muted shrink-0">
-                {formatTimecode(trimStartFrame)}
-              </span>
-            </div>
-          </PropertyRow>
-          <PropertyRow label="Trim Out">
-            <div className="flex items-center gap-2">
-              <NumberInput
-                value={trimEndFrame}
-                onChange={(v) => onClipUpdate?.({ trimEndFrame: Math.max(trimStartFrame + 1, v) })}
-                min={trimStartFrame + 1}
-                max={Math.max(trimStartFrame + 1, selectedClip.durationInFrames)}
-                unit="f"
-              />
-              <span className="text-xs text-studio-text-muted shrink-0">
-                {formatTimecode(trimEndFrame)}
-              </span>
-            </div>
-          </PropertyRow>
           <PropertyRow label="Speed">
             <NumberInput
               value={speed}
@@ -469,6 +441,9 @@ export const InspectorPanel = ({ selectedClip, fps, onClipUpdate }: InspectorPan
               unit="x"
             />
           </PropertyRow>
+          <div className="mt-2 p-2 bg-studio-bg rounded text-xs text-studio-text-muted">
+            <p>💡 Use trim handles on the clip in the timeline to adjust trim start/end</p>
+          </div>
         </InspectorSection>
 
         {/* Transform Section */}

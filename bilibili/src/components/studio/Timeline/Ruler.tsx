@@ -18,9 +18,9 @@ export const Ruler: React.FC<RulerProps> = ({
   onSeek,
 }) => {
   const formatTimecode = (frame: number, fps: number) => {
-    const totalSeconds = Math.floor(frame / fps);
+    const totalSeconds = frame / fps;
     const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
-    const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+    const seconds = (totalSeconds % 60).toFixed(1).padStart(4, "0");
     return `${minutes}:${seconds}`;
   };
 
