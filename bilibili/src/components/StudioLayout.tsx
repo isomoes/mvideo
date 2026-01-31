@@ -1,8 +1,8 @@
 import React, { useMemo } from "react";
 import {
-  Separator as ResizableHandle,
+  PanelResizeHandle as ResizableHandle,
   Panel as ResizablePanel,
-  Group as ResizablePanelGroup,
+  PanelGroup as ResizablePanelGroup,
 } from "react-resizable-panels";
 import { useUIStore } from "../services/ui-store";
 import { Panel } from "./Panel";

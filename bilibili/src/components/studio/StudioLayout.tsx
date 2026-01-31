@@ -3,8 +3,8 @@
 import { ReactNode } from "react";
 import {
   Panel as ResizablePanel,
-  Group as ResizablePanelGroup,
-  Separator as ResizableHandle,
+  PanelGroup as ResizablePanelGroup,
+  PanelResizeHandle as ResizableHandle,
 } from "react-resizable-panels";
 
 interface StudioLayoutProps {
