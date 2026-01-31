@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import {
   Panel as ResizablePanel,
   Group as ResizablePanelGroup,
@@ -12,6 +12,7 @@ interface StudioLayoutProps {
   resourcesPanel: ReactNode;
   previewPanel: ReactNode;
   inspectorPanel: ReactNode;
+  exportPanel: ReactNode;
   timelinePanel: ReactNode;
 }
 
@@ -20,8 +21,11 @@ export const StudioLayout = ({
   resourcesPanel,
   previewPanel,
   inspectorPanel,
+  exportPanel,
   timelinePanel,
 }: StudioLayoutProps) => {
+  const [rightPanelTab, setRightPanelTab] = useState<"inspector" | "export">("inspector");
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-studio-bg">
       {/* Top Toolbar */}
@@ -32,7 +36,7 @@ export const StudioLayout = ({
       {/* Main Content Area */}
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup orientation="vertical" id="main-vertical-group">
-          {/* Upper Section: Resources | Preview | Inspector */}
+          {/* Upper Section: Resources | Preview | Inspector/Export */}
           <ResizablePanel id="upper-section">
             <ResizablePanelGroup
               orientation="horizontal"
@@ -60,10 +64,36 @@ export const StudioLayout = ({
                 style={{ flexBasis: "6px" }}
               />
 
-              {/* Right: Inspector Panel */}
-              <ResizablePanel minSize={100} maxSize={300} id="inspector-panel">
-                <div className="h-full border-l border-studio-border bg-studio-panel-bg">
-                  {inspectorPanel}
+              {/* Right: Inspector/Export Panel with Tabs */}
+              <ResizablePanel minSize={100} maxSize={300} id="right-panel">
+                <div className="h-full border-l border-studio-border bg-studio-panel-bg flex flex-col">
+                  {/* Tab Header */}
+                  <div className="flex border-b border-studio-border bg-studio-panel-header">
+                    <button
+                      onClick={() => setRightPanelTab("inspector")}
+                      className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                        rightPanelTab === "inspector"
+                          ? "text-studio-accent border-b-2 border-studio-accent"
+                          : "text-studio-text-muted hover:text-studio-text"
+                      }`}
+                    >
+                      Inspector
+                    </button>
+                    <button
+                      onClick={() => setRightPanelTab("export")}
+                      className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                        rightPanelTab === "export"
+                          ? "text-studio-accent border-b-2 border-studio-accent"
+                          : "text-studio-text-muted hover:text-studio-text"
+                      }`}
+                    >
+                      Export
+                    </button>
+                  </div>
+                  {/* Tab Content */}
+                  <div className="flex-1 min-h-0">
+                    {rightPanelTab === "inspector" ? inspectorPanel : exportPanel}
+                  </div>
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>

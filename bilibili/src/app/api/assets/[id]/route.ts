@@ -12,14 +12,15 @@ import type {
 export const runtime = "nodejs";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 export const GET = async (_req: Request, { params }: RouteParams) => {
   try {
-    const asset = await readAssetRecord(params.id);
+    const { id } = await params;
+    const asset = await readAssetRecord(id);
     if (!asset) {
       return NextResponse.json(
         { type: "error", message: "Asset not found" },
@@ -38,13 +39,14 @@ export const GET = async (_req: Request, { params }: RouteParams) => {
 
 export const PATCH = async (req: Request, { params }: RouteParams) => {
   try {
+    const { id } = await params;
     const payload = (await req.json()) as {
       originalName?: string;
       metadata?: MediaMetadata;
       derived?: DerivedAssetRecord;
     };
 
-    const asset = await updateAssetRecord(params.id, {
+    const asset = await updateAssetRecord(id, {
       originalName: payload.originalName,
       metadata: payload.metadata,
       derived: payload.derived,
@@ -60,7 +62,8 @@ export const PATCH = async (req: Request, { params }: RouteParams) => {
 
 export const DELETE = async (_req: Request, { params }: RouteParams) => {
   try {
-    await deleteAsset(params.id);
+    const { id } = await params;
+    await deleteAsset(id);
     return NextResponse.json({ type: "success" });
   } catch (error) {
     return NextResponse.json(

@@ -103,28 +103,28 @@ Based on [ARCH.md](./ARCH.md)
 
 ### 4.3 Timeline Component (Requires 4.1 + 4.2)
 
-- [ ] Create timeline track container
-- [ ] Implement clip rendering on timeline
-- [ ] Add clip trimming (drag handles)
-- [ ] Implement drag-and-drop clip positioning
-- [ ] Add snapping behavior
-- [ ] Display waveform on audio clips
-- [ ] Add zoom and scroll controls
-- [ ] Implement playhead with current time indicator
+- [x] Create timeline track container
+- [x] Implement clip rendering on timeline
+- [x] Add clip trimming (drag handles)
+- [x] Implement drag-and-drop clip positioning
+- [x] Add snapping behavior
+- [x] Display waveform on audio clips
+- [x] Add zoom and scroll controls
+- [x] Implement playhead with current time indicator
 
 ### 4.4 Inspector Panel (Can start after 4.1)
 
-- [ ] Create inspector panel layout
-- [ ] Show clip metadata (duration, source, effects)
-- [ ] Add effect parameter editors
-- [ ] Implement trim point adjustment inputs
+- [x] Create inspector panel layout
+- [x] Show clip metadata (duration, source, effects)
+- [x] Add effect parameter editors
+- [x] Implement trim point adjustment inputs
 
 ### 4.5 Export Panel (Can start after 4.1)
 
-- [ ] Create export panel UI
-- [ ] Add render configuration options (resolution, fps, format)
-- [ ] Display render progress and status
-- [ ] Show render history and output links
+- [x] Create export panel UI
+- [x] Add render configuration options (resolution, fps, format)
+- [x] Display render progress and status
+- [x] Show render history and output links
 
 ## Phase 5: Render Service
 
@@ -138,7 +138,6 @@ Based on [ARCH.md](./ARCH.md)
 
 ### 5.2 Render Options (Can start after 5.1)
 
-- [ ] Add Lambda render support (optional)
 - [ ] Implement render presets (quality profiles)
 - [ ] Add batch rendering support
 

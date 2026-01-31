@@ -7,10 +7,6 @@ import { z } from "zod";
 import {
   defaultMyCompProps,
   MyCompProps,
-  DURATION_IN_FRAMES,
-  VIDEO_FPS,
-  VIDEO_WIDTH,
-  VIDEO_HEIGHT,
 } from "../../types/constants";
 import {
   StudioLayout,
@@ -18,6 +14,7 @@ import {
   PreviewPlayer,
   ResourcesPanel,
   InspectorPanel,
+  ExportPanel,
   TimelinePanel,
   KeymapModal,
 } from "../components/studio";
@@ -300,6 +297,7 @@ const Home: NextPage = () => {
             }}
           />
         }
+        exportPanel={<ExportPanel />}
         timelinePanel={
           <TimelinePanel
             tracks={timelineTracks}
