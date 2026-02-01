@@ -2,7 +2,7 @@
 #include <QPainter>
 #include <QMouseEvent>
 #include <QFileDialog>
-#include <QDebug>
+#include <QSizePolicy>
 
 Timeline::Timeline(QWidget *parent)
     : QWidget(parent)
@@ -15,6 +15,7 @@ Timeline::Timeline(QWidget *parent)
     setupUI();
     setMinimumHeight(150);
     setMouseTracking(true);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
 Timeline::~Timeline()
@@ -33,6 +34,10 @@ void Timeline::setupUI()
     // Position buttons at the top-left
     m_addClipButton->move(5, 5);
     m_removeClipButton->move(m_addClipButton->x() + m_addClipButton->sizeHint().width() + 5, 5);
+    
+    // Ensure buttons are visible above the painted content
+    m_addClipButton->raise();
+    m_removeClipButton->raise();
     
     connect(m_addClipButton, &QPushButton::clicked, this, &Timeline::onAddClipClicked);
     connect(m_removeClipButton, &QPushButton::clicked, this, &Timeline::onRemoveClipClicked);
@@ -113,25 +118,38 @@ void Timeline::paintEvent(QPaintEvent *event)
     
     // Draw clips below the ruler
     int clipAreaY = rulerY + rulerHeight + 10;
-    painter.translate(0, clipAreaY);
+    int clipAreaHeight = 60;
+    
+    // Draw clip track background (slightly different color to show the area)
+    painter.fillRect(0, clipAreaY, width(), clipAreaHeight, QColor(55, 55, 55));
+    
+    // Draw each clip
     for (int i = 0; i < m_clips.size(); ++i) {
+        painter.save();
+        painter.translate(0, clipAreaY);
         drawClip(painter, m_clips[i], i);
+        painter.restore();
     }
 }
 
 void Timeline::drawClip(QPainter &painter, const Clip &clip, int index)
 {
     int x = timeToPixel(clip.startTime());
-    int width = timeToPixel(clip.duration());
+    int clipWidth = timeToPixel(clip.duration());
     int height = 60;
+    
+    // Ensure minimum width for visibility
+    if (clipWidth < 50) {
+        clipWidth = 50;
+    }
     
     // Clip background
     QColor clipColor = (index == m_selectedClipIndex) ? QColor(100, 150, 255) : QColor(80, 120, 200);
-    painter.fillRect(x, 0, width, height, clipColor);
+    painter.fillRect(x, 0, clipWidth, height, clipColor);
     
     // Clip border
     painter.setPen(QPen(QColor(255, 255, 255), 2));
-    painter.drawRect(x, 0, width, height);
+    painter.drawRect(x, 0, clipWidth, height);
     
     // Clip label
     painter.setPen(QColor(255, 255, 255));
@@ -141,7 +159,7 @@ void Timeline::drawClip(QPainter &painter, const Clip &clip, int index)
     
     QString fileName = clip.filePath().split('/').last();
     QFontMetrics fm(font);
-    QString elidedText = fm.elidedText(fileName, Qt::ElideMiddle, width - 10);
+    QString elidedText = fm.elidedText(fileName, Qt::ElideMiddle, clipWidth - 10);
     painter.drawText(x + 5, 20, elidedText);
     
     // Duration text
@@ -155,7 +173,7 @@ void Timeline::drawClip(QPainter &painter, const Clip &clip, int index)
             painter.drawLine(x + 5, 0, x + 5, height);
         }
         if (clip.trimEnd() > 0) {
-            painter.drawLine(x + width - 5, 0, x + width - 5, height);
+            painter.drawLine(x + clipWidth - 5, 0, x + clipWidth - 5, height);
         }
     }
 }

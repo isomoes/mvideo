@@ -6,6 +6,7 @@
 class Clip
 {
 public:
+    Clip();
     Clip(const QString &filePath, double startTime, double duration);
     
     QString filePath() const { return m_filePath; }
