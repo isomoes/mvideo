@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useRef, useCallback, useState, useEffect } from "react";
-import { Player, type PlayerRef, type CallbackListener } from "@remotion/player";
+import {
+  Player,
+  type PlayerRef,
+  type CallbackListener,
+} from "@remotion/player";
 
 interface PreviewPlayerProps {
   component: React.ComponentType<any>;
@@ -19,8 +23,12 @@ interface PreviewPlayerProps {
 
 const formatTimecode = (frame: number, fps: number) => {
   const totalSeconds = Math.floor(frame / fps);
-  const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, "0");
-  const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, "0");
+  const hours = Math.floor(totalSeconds / 3600)
+    .toString()
+    .padStart(2, "0");
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+    .toString()
+    .padStart(2, "0");
   const seconds = (totalSeconds % 60).toString().padStart(2, "0");
   const frames = (frame % fps).toString().padStart(2, "0");
   return `${hours}:${minutes}:${seconds}:${frames}`;
@@ -76,14 +84,17 @@ export const PreviewPlayer = ({
     (clientX: number) => {
       if (!scrubberRef.current || !playerRef.current) return;
       const rect = scrubberRef.current.getBoundingClientRect();
-      const percent = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+      const percent = Math.min(
+        Math.max((clientX - rect.left) / rect.width, 0),
+        1,
+      );
       const frame = Math.round(percent * (durationInFrames - 1));
-      
+
       // Seek first, then update state to avoid conflicts
       playerRef.current.seekTo(frame);
       onFrameChange(frame);
     },
-    [durationInFrames, onFrameChange, playerRef]
+    [durationInFrames, onFrameChange, playerRef],
   );
 
   const handlePointerDown = useCallback(
@@ -92,7 +103,7 @@ export const PreviewPlayer = ({
       handleScrub(e.clientX);
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [handleScrub]
+    [handleScrub],
   );
 
   const handlePointerMove = useCallback(
@@ -101,7 +112,7 @@ export const PreviewPlayer = ({
         handleScrub(e.clientX);
       }
     },
-    [isScrubbing, handleScrub]
+    [isScrubbing, handleScrub],
   );
 
   const handlePointerUp = useCallback(() => {
@@ -122,8 +133,10 @@ export const PreviewPlayer = ({
   }, []);
 
   const progressPercent = (currentFrame / (durationInFrames - 1)) * 100;
-  const inPercent = inPoint !== null ? (inPoint / (durationInFrames - 1)) * 100 : null;
-  const outPercent = outPoint !== null ? (outPoint / (durationInFrames - 1)) * 100 : null;
+  const inPercent =
+    inPoint !== null ? (inPoint / (durationInFrames - 1)) * 100 : null;
+  const outPercent =
+    outPoint !== null ? (outPoint / (durationInFrames - 1)) * 100 : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -132,7 +145,9 @@ export const PreviewPlayer = ({
         <div className="flex items-center gap-3">
           <h3 className="text-studio-text font-medium text-sm">Preview</h3>
           <div className="flex items-center gap-2 text-xs text-studio-text-muted">
-            <span>{width}x{height}</span>
+            <span>
+              {width}x{height}
+            </span>
             <span className="text-studio-border">|</span>
             <span>{fps} fps</span>
           </div>
@@ -191,19 +206,7 @@ export const PreviewPlayer = ({
               clickToPlay={false}
               doubleClickToFullscreen={false}
               spaceKeyToPlayOrPause={false}
-              renderLoading={() => (
-                <div style={{
-                  width: "100%",
-                  height: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "#000",
-                  color: "#888",
-                }}>
-                  Loading video...
-                </div>
-              )}
+              logLevel="trace"
             />
           </div>
         </div>
@@ -330,7 +333,10 @@ export const PreviewPlayer = ({
             className="px-2 py-1 text-xs text-studio-text-muted hover:text-studio-text hover:bg-studio-border rounded transition-colors"
             onClick={() => {
               if (!playerRef.current) return;
-              const newFrame = Math.min(durationInFrames - 1, currentFrame + 10);
+              const newFrame = Math.min(
+                durationInFrames - 1,
+                currentFrame + 10,
+              );
               playerRef.current.seekTo(newFrame);
               onFrameChange(newFrame);
             }}
