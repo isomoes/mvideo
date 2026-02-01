@@ -7,6 +7,7 @@
 class QSlider;
 class QToolButton;
 class QTimer;
+class Timeline;
 
 class MainWindow : public QMainWindow
 {
@@ -16,6 +17,15 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+private slots:
+    void openFile();
+    void playPause();
+    void updatePosition();
+    void beginSeek();
+    void endSeek();
+    void onClipSelected(int index);
+    void onTimelineChanged();
+
 private:
     mpv_handle *mpv;
     QWidget *videoContainer;
@@ -24,16 +34,11 @@ private:
     QTimer *positionTimer;
     bool userSeeking;
     double mediaDuration;
+    Timeline *timeline;
     
     void initializeMpv();
+    void setupUI();
     void updatePlayButton(bool isPlaying);
-
-private slots:
-    void openFile();
-    void playPause();
-    void updatePosition();
-    void beginSeek();
-    void endSeek();
 };
 
 #endif // MAINWINDOW_H

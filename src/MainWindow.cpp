@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "Timeline.h"
 #include <QAction>
 #include <QFile>
 #include <QFileDialog>
@@ -25,6 +26,13 @@ MainWindow::MainWindow(QWidget *parent)
     , positionTimer(nullptr)
     , userSeeking(false)
     , mediaDuration(0.0)
+    , timeline(nullptr)
+{
+    setupUI();
+    initializeMpv();
+}
+
+void MainWindow::setupUI()
 {
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
     QAction *openAction = fileMenu->addAction(tr("&Open..."));
@@ -40,7 +48,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Create a container for the video
     videoContainer = new QWidget(this);
     videoContainer->setMinimumSize(640, 480);
-    layout->addWidget(videoContainer);
+    layout->addWidget(videoContainer, 2);
 
     QWidget *controlsWidget = new QWidget(this);
     QHBoxLayout *controlsLayout = new QHBoxLayout(controlsWidget);
@@ -65,8 +73,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(positionTimer, &QTimer::timeout, this, &MainWindow::updatePosition);
     positionTimer->start();
 
-    // Initialize MPV
-    initializeMpv();
+    // Create timeline widget
+    timeline = new Timeline(this);
+    layout->addWidget(timeline, 1);
+    
+    // Connect timeline signals
+    connect(timeline, &Timeline::clipSelected, this, &MainWindow::onClipSelected);
+    connect(timeline, &Timeline::timelineChanged, this, &MainWindow::onTimelineChanged);
 }
 
 MainWindow::~MainWindow()
@@ -203,4 +216,28 @@ void MainWindow::updatePlayButton(bool isPlaying)
     }
 
     playPauseButton->setText(isPlaying ? tr("Pause") : tr("Play"));
+}
+
+void MainWindow::onClipSelected(int index)
+{
+    qDebug() << "Clip selected:" << index;
+    
+    // Load and play the selected clip
+    const QVector<Clip>& clips = timeline->clips();
+    if (index >= 0 && index < clips.size()) {
+        const Clip &clip = clips[index];
+        const char *cmd[] = {"loadfile", clip.filePath().toUtf8().constData(), NULL};
+        mpv_command(mpv, cmd);
+        
+        // Seek to trim start if needed
+        if (clip.trimStart() > 0) {
+            double trimStart = clip.trimStart();
+            mpv_set_property_async(mpv, 0, "time-pos", MPV_FORMAT_DOUBLE, &trimStart);
+        }
+    }
+}
+
+void MainWindow::onTimelineChanged()
+{
+    qDebug() << "Timeline changed, total duration:" << timeline->totalDuration();
 }

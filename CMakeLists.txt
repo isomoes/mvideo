@@ -19,10 +19,14 @@ link_directories(${MPV_LIBRARY_DIRS})
 set(SOURCES
     src/main.cpp
     src/MainWindow.cpp
+    src/Timeline.cpp
+    src/Clip.cpp
 )
 
 set(HEADERS
     include/MainWindow.h
+    include/Timeline.h
+    include/Clip.h
 )
 
 add_executable(mvideo ${SOURCES} ${HEADERS})
