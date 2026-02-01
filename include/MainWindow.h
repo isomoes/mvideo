@@ -10,6 +10,7 @@ class QSlider;
 class QToolButton;
 class QTimer;
 class Timeline;
+class MpvVideoWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -36,9 +37,8 @@ private:
         double trimStart;
         bool isGap;
     };
-
     mpv_handle *mpv;
-    QWidget *videoContainer;
+    MpvVideoWidget *videoContainer;
     QToolButton *playPauseButton;
     QSlider *seekSlider;
     QTimer *positionTimer;
@@ -53,6 +53,8 @@ private:
     void setupUI();
     void updatePlayButton(bool isPlaying);
     void rebuildTimelinePlaylist(bool preservePosition);
+    void rebuildTimelineEDL(bool preservePosition);
+    QString generateEDLString() const;
     void seekToTimelineTime(double timelineTime);
     bool timelinePositionForMpv(double &timelinePos) const;
     bool segmentForTimelineTime(double timelineTime, int &index, double &localPos) const;

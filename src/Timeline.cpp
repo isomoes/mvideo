@@ -14,6 +14,7 @@ Timeline::Timeline(QWidget *parent)
     , m_selectedClipIndex(-1)
     , m_pixelsPerSecond(50.0)
     , m_scrollOffset(0.0)
+    , m_playheadPosition(0.0)
     , m_isDragging(false)
     , m_isResizing(false)
     , m_isPanning(false)
@@ -94,6 +95,14 @@ double Timeline::totalDuration() const
     return maxEnd;
 }
 
+void Timeline::setPlayheadPosition(double time)
+{
+    if (m_playheadPosition != time) {
+        m_playheadPosition = time;
+        update();
+    }
+}
+
 void Timeline::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
@@ -136,6 +145,21 @@ void Timeline::paintEvent(QPaintEvent *event)
         painter.translate(0, clipAreaY);
         drawClip(painter, m_clips[i], i);
         painter.restore();
+    }
+    
+    // Draw playhead indicator
+    int playheadX = timeToPixel(m_playheadPosition);
+    if (playheadX >= 0 && playheadX <= width()) {
+        painter.setPen(QPen(QColor(255, 0, 0), 2));
+        painter.drawLine(playheadX, rulerY, playheadX, height());
+        
+        // Draw playhead triangle at top
+        QPolygon triangle;
+        triangle << QPoint(playheadX, rulerY)
+                 << QPoint(playheadX - 6, rulerY - 10)
+                 << QPoint(playheadX + 6, rulerY - 10);
+        painter.setBrush(QColor(255, 0, 0));
+        painter.drawPolygon(triangle);
     }
 }
 

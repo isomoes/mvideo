@@ -28,11 +28,16 @@ public:
     // Timeline properties
     double totalDuration() const;
     
+    // Playhead control
+    void setPlayheadPosition(double time);
+    double playheadPosition() const { return m_playheadPosition; }
+    
 signals:
     void clipAdded(int index);
     void clipRemoved(int index);
     void clipSelected(int index);
     void timelineChanged();
+    void playheadMoved(double time);
     
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -50,6 +55,7 @@ private:
     int m_selectedClipIndex;
     double m_pixelsPerSecond;
     double m_scrollOffset;
+    double m_playheadPosition;
     
     // UI elements
     QPushButton *m_addClipButton;

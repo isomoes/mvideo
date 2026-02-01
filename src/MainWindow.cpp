@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "Timeline.h"
+#include "MpvVideoWidget.h"
 #include <QAction>
 #include <QFile>
 #include <QFileDialog>
@@ -7,136 +8,15 @@
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
-#include <QMetaObject>
-#include <QOpenGLContext>
-#include <QOpenGLFunctions>
-#include <QOpenGLWidget>
-#include <QtGlobal>
 #include <QSlider>
 #include <QToolButton>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QDebug>
-#include <mpv/render.h>
-#include <mpv/render_gl.h>
 #include <algorithm>
 #include <cmath>
 #include <clocale>
-
-namespace {
-
-class MpvVideoWidget : public QOpenGLWidget, protected QOpenGLFunctions
-{
-public:
-    explicit MpvVideoWidget(QWidget *parent = nullptr)
-        : QOpenGLWidget(parent)
-        , mpv(nullptr)
-        , mpvGl(nullptr)
-    {
-        setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);
-    }
-
-    ~MpvVideoWidget() override
-    {
-        shutdown();
-    }
-
-    void setMpv(mpv_handle *handle)
-    {
-        mpv = handle;
-        if (mpv && context() && !mpvGl) {
-            initRenderContext();
-        }
-    }
-
-    void shutdown()
-    {
-        if (mpvGl) {
-            mpv_render_context_free(mpvGl);
-            mpvGl = nullptr;
-        }
-        mpv = nullptr;
-    }
-
-protected:
-    void initializeGL() override
-    {
-        initializeOpenGLFunctions();
-        if (mpv && !mpvGl) {
-            initRenderContext();
-        }
-    }
-
-    void paintGL() override
-    {
-        if (!mpvGl) {
-            glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
-            return;
-        }
-
-        const qreal dpr = devicePixelRatio();
-        mpv_opengl_fbo fbo = {
-            static_cast<int>(defaultFramebufferObject()),
-            static_cast<int>(width() * dpr),
-            static_cast<int>(height() * dpr),
-            0
-        };
-        int flip = 1;
-        mpv_render_param params[] = {
-            { MPV_RENDER_PARAM_OPENGL_FBO, &fbo },
-            { MPV_RENDER_PARAM_FLIP_Y, &flip },
-            { MPV_RENDER_PARAM_INVALID, nullptr }
-        };
-        mpv_render_context_render(mpvGl, params);
-    }
-
-    void resizeGL(int w, int h) override
-    {
-        Q_UNUSED(w);
-        Q_UNUSED(h);
-        update();
-    }
-
-private:
-    mpv_handle *mpv;
-    mpv_render_context *mpvGl;
-
-    static void *getProcAddress(void *ctx, const char *name)
-    {
-        Q_UNUSED(ctx);
-        QOpenGLContext *glctx = QOpenGLContext::currentContext();
-        if (!glctx) {
-            return nullptr;
-        }
-        return reinterpret_cast<void *>(glctx->getProcAddress(QByteArray(name)));
-    }
-
-    static void onMpvUpdate(void *ctx)
-    {
-        MpvVideoWidget *self = static_cast<MpvVideoWidget *>(ctx);
-        QMetaObject::invokeMethod(self, "update", Qt::QueuedConnection);
-    }
-
-    void initRenderContext()
-    {
-        mpv_opengl_init_params glInit = { getProcAddress, this };
-        mpv_render_param params[] = {
-            { MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_OPENGL) },
-            { MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &glInit },
-            { MPV_RENDER_PARAM_INVALID, nullptr }
-        };
-        if (mpv_render_context_create(&mpvGl, mpv, params) < 0) {
-            qDebug() << "mpv render context init failed";
-            mpvGl = nullptr;
-            return;
-        }
-        mpv_render_context_set_update_callback(mpvGl, onMpvUpdate, this);
-    }
-};
-
-} // namespace
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -208,9 +88,7 @@ void MainWindow::setupUI()
 MainWindow::~MainWindow()
 {
     if (videoContainer) {
-        if (auto *mpvWidget = dynamic_cast<MpvVideoWidget *>(videoContainer)) {
-            mpvWidget->shutdown();
-        }
+        videoContainer->shutdown();
     }
     if (mpv) {
         mpv_terminate_destroy(mpv);
@@ -242,9 +120,7 @@ void MainWindow::initializeMpv()
     }
 
     if (videoContainer) {
-        if (auto *mpvWidget = dynamic_cast<MpvVideoWidget *>(videoContainer)) {
-            mpvWidget->setMpv(mpv);
-        }
+        videoContainer->setMpv(mpv);
     }
     
     // Play a test video (optional, can be removed later)
@@ -306,20 +182,19 @@ void MainWindow::updatePosition()
         return;
     }
 
+    // For EDL playback, position is continuous across all clips
     if (usingTimelinePlaylist && !timelineSegments.isEmpty()) {
-        int64_t playlistPos = 0;
-        if (mpv_get_property(mpv, "playlist-pos", MPV_FORMAT_INT64, &playlistPos) >= 0) {
-            double position = 0.0;
-            if (mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &position) >= 0) {
-                if (playlistPos >= 0 && playlistPos < timelineSegments.size()) {
-                    const TimelineSegment &segment = timelineSegments.at(static_cast<int>(playlistPos));
-                    double timelinePos = segment.timelineStart + position;
-                    currentTimelinePos = timelinePos;
-                    const int sliderValue = static_cast<int>(timelinePos * 1000.0);
-                    seekSlider->blockSignals(true);
-                    seekSlider->setValue(sliderValue);
-                    seekSlider->blockSignals(false);
-                }
+        double position = 0.0;
+        if (mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &position) >= 0) {
+            currentTimelinePos = position;
+            const int sliderValue = static_cast<int>(position * 1000.0);
+            seekSlider->blockSignals(true);
+            seekSlider->setValue(sliderValue);
+            seekSlider->blockSignals(false);
+            
+            // Update timeline playhead position for real-time preview
+            if (timeline) {
+                timeline->setPlayheadPosition(position);
             }
         }
 
@@ -344,6 +219,11 @@ void MainWindow::updatePosition()
         seekSlider->blockSignals(true);
         seekSlider->setValue(sliderValue);
         seekSlider->blockSignals(false);
+        
+        // Update timeline playhead for single file playback
+        if (timeline) {
+            timeline->setPlayheadPosition(position);
+        }
     }
 
     int paused = 0;
@@ -389,14 +269,16 @@ void MainWindow::onClipSelected(int index)
     const QVector<Clip>& clips = timeline->clips();
     if (index >= 0 && index < clips.size()) {
         const Clip &clip = clips[index];
-        rebuildTimelinePlaylist(true);
+        // Seek to the clip's start time in the EDL stream
         seekToTimelineTime(clip.startTime());
     }
 }
 
 void MainWindow::onTimelineChanged()
 {
-    rebuildTimelinePlaylist(true);
+    // Rebuild MPV EDL stream immediately when timeline changes
+    // This enables real-time preview of timeline edits
+    rebuildTimelineEDL(true);
 }
 
 void MainWindow::rebuildTimelinePlaylist(bool preservePosition)
@@ -499,9 +381,170 @@ void MainWindow::rebuildTimelinePlaylist(bool preservePosition)
     mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &paused);
 }
 
+QString MainWindow::generateEDLString() const
+{
+    // MPV EDL format: edl://[clip1];[clip2];[clip3]...
+    // Each clip: [file_path,start,length] or [file_path]
+    // Example: edl://video1.mp4,10,5;video2.mp4,0,3
+    
+    if (!timeline) {
+        return QString();
+    }
+    
+    QVector<Clip> sortedClips = timeline->clips();
+    std::sort(sortedClips.begin(), sortedClips.end(), [](const Clip &a, const Clip &b) {
+        return a.startTime() < b.startTime();
+    });
+    
+    QStringList edlParts;
+    double cursor = 0.0;
+    
+    for (const Clip &clip : sortedClips) {
+        if (clip.duration() <= 0.0) {
+            continue;
+        }
+        
+        double start = clip.startTime();
+        if (start < 0.0) {
+            start = 0.0;
+        }
+        
+        // Add black gap if needed
+        if (start > cursor) {
+            double gapDuration = start - cursor;
+            QString gapClip = QString("lavfi:color=c=black:s=1280x720:r=30:d=%1")
+                                .arg(gapDuration, 0, 'f', 3);
+            edlParts.append(gapClip);
+            cursor = start;
+        }
+        
+        // Add the actual clip with trimming
+        QString filePath = clip.filePath();
+        double trimStart = clip.trimStart();
+        double duration = clip.duration();
+        
+        // Escape special characters in file path
+        filePath.replace(";", "\\;");
+        filePath.replace(",", "\\,");
+        
+        QString clipPart;
+        if (trimStart > 0.0 || duration > 0.0) {
+            clipPart = QString("%1,%2,%3")
+                        .arg(filePath)
+                        .arg(trimStart, 0, 'f', 3)
+                        .arg(duration, 0, 'f', 3);
+        } else {
+            clipPart = filePath;
+        }
+        
+        edlParts.append(clipPart);
+        cursor = std::max(cursor, start + duration);
+    }
+    
+    if (edlParts.isEmpty()) {
+        return QString();
+    }
+    
+    return "edl://" + edlParts.join(";");
+}
+
+void MainWindow::rebuildTimelineEDL(bool preservePosition)
+{
+    if (!mpv || !timeline) {
+        return;
+    }
+    
+    double previousTimelinePos = currentTimelinePos;
+    int paused = 0;
+    mpv_get_property(mpv, "pause", MPV_FORMAT_FLAG, &paused);
+    
+    // Build timeline segments for position tracking
+    timelineSegments.clear();
+    QVector<Clip> sortedClips = timeline->clips();
+    std::sort(sortedClips.begin(), sortedClips.end(), [](const Clip &a, const Clip &b) {
+        return a.startTime() < b.startTime();
+    });
+    
+    double cursor = 0.0;
+    for (const Clip &clip : sortedClips) {
+        if (clip.duration() <= 0.0) {
+            continue;
+        }
+        
+        double start = clip.startTime();
+        if (start < 0.0) {
+            start = 0.0;
+        }
+        
+        if (start > cursor) {
+            TimelineSegment gapSegment;
+            gapSegment.timelineStart = cursor;
+            gapSegment.duration = start - cursor;
+            gapSegment.trimStart = 0.0;
+            gapSegment.isGap = true;
+            gapSegment.source = QString("lavfi:color=c=black:s=1280x720:r=30:d=%1")
+                                   .arg(gapSegment.duration, 0, 'f', 3);
+            timelineSegments.append(gapSegment);
+            cursor = start;
+        }
+        
+        TimelineSegment segment;
+        segment.timelineStart = start;
+        segment.duration = clip.duration();
+        segment.trimStart = clip.trimStart();
+        segment.isGap = false;
+        segment.source = clip.filePath();
+        timelineSegments.append(segment);
+        cursor = std::max(cursor, start + clip.duration());
+    }
+    
+    if (timelineSegments.isEmpty()) {
+        const char *cmd[] = {"stop", NULL};
+        mpv_command(mpv, cmd);
+        usingTimelinePlaylist = false;
+        mediaDuration = 0.0;
+        seekSlider->setRange(0, 0);
+        playPauseButton->setEnabled(false);
+        seekSlider->setEnabled(false);
+        currentTimelinePos = 0.0;
+        return;
+    }
+    
+    // Generate EDL string
+    QString edlString = generateEDLString();
+    if (edlString.isEmpty()) {
+        return;
+    }
+    
+    qDebug() << "EDL String:" << edlString;
+    
+    // Load the EDL as a single continuous stream
+    QByteArray edlBytes = edlString.toUtf8();
+    const char *cmd[] = {"loadfile", edlBytes.constData(), NULL};
+    mpv_command(mpv, cmd);
+    
+    usingTimelinePlaylist = true;
+    mediaDuration = timeline->totalDuration();
+    seekSlider->setRange(0, static_cast<int>(mediaDuration * 1000.0));
+    playPauseButton->setEnabled(true);
+    seekSlider->setEnabled(true);
+    
+    if (preservePosition) {
+        // For EDL, we can seek directly to timeline position
+        double seekPos = previousTimelinePos;
+        if (seekPos < 0.0) seekPos = 0.0;
+        if (seekPos > mediaDuration) seekPos = mediaDuration;
+        
+        mpv_set_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &seekPos);
+        currentTimelinePos = seekPos;
+    }
+    
+    mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &paused);
+}
+
 void MainWindow::seekToTimelineTime(double timelineTime)
 {
-    if (!mpv || timelineSegments.isEmpty()) {
+    if (!mpv) {
         return;
     }
 
@@ -509,20 +552,14 @@ void MainWindow::seekToTimelineTime(double timelineTime)
         timelineTime = 0.0;
     }
 
-    double totalDuration = timeline->totalDuration();
+    double totalDuration = timeline ? timeline->totalDuration() : mediaDuration;
     if (totalDuration > 0.0 && timelineTime > totalDuration) {
         timelineTime = totalDuration;
     }
 
-    int index = -1;
-    double localPos = 0.0;
-    if (!segmentForTimelineTime(timelineTime, index, localPos)) {
-        return;
-    }
-
-    int64_t playlistPos = index;
-    mpv_set_property(mpv, "playlist-pos", MPV_FORMAT_INT64, &playlistPos);
-    mpv_set_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &localPos);
+    // For EDL playback, we can seek directly to the timeline position
+    // since EDL creates a continuous stream
+    mpv_set_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &timelineTime);
     currentTimelinePos = timelineTime;
 }
 

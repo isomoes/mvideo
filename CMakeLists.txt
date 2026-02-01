@@ -21,12 +21,14 @@ set(SOURCES
     src/MainWindow.cpp
     src/Timeline.cpp
     src/Clip.cpp
+    src/MpvVideoWidget.cpp
 )
 
 set(HEADERS
     include/MainWindow.h
     include/Timeline.h
     include/Clip.h
+    include/MpvVideoWidget.h
 )
 
 add_executable(mvideo ${SOURCES} ${HEADERS})
