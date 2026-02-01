@@ -39,6 +39,7 @@ export const PreviewPlayer: React.FC = () => {
           }}
           controls
           onFrameUpdate={(e) => setPlayhead(e.frame)}
+          acknowledgeRemotionLicense
         />
       </div>
       <div className="mt-4 text-sm font-mono text-zinc-500">
