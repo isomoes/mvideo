@@ -9,7 +9,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets OpenGL)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MPV REQUIRED mpv)
 
@@ -31,4 +31,4 @@ set(HEADERS
 
 add_executable(mvideo ${SOURCES} ${HEADERS})
 
-target_link_libraries(mvideo PRIVATE Qt6::Widgets ${MPV_LIBRARIES})
+target_link_libraries(mvideo PRIVATE Qt6::Widgets Qt6::OpenGLWidgets Qt6::OpenGL ${MPV_LIBRARIES})
