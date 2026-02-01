@@ -20,6 +20,7 @@
 #include <QDebug>
 #include <mpv/render.h>
 #include <mpv/render_gl.h>
+#include <algorithm>
 #include <cmath>
 #include <clocale>
 
@@ -147,6 +148,8 @@ MainWindow::MainWindow(QWidget *parent)
     , userSeeking(false)
     , mediaDuration(0.0)
     , timeline(nullptr)
+    , usingTimelinePlaylist(false)
+    , currentTimelinePos(0.0)
 {
     setupUI();
     initializeMpv();
@@ -270,6 +273,10 @@ void MainWindow::openFile()
     mpv_command(mpv, cmd);
     mpv_set_property_string(mpv, "pause", "no");
 
+    usingTimelinePlaylist = false;
+    timelineSegments.clear();
+    currentTimelinePos = 0.0;
+
     mediaDuration = 0.0;
     seekSlider->setRange(0, 0);
     playPauseButton->setEnabled(true);
@@ -296,6 +303,30 @@ void MainWindow::playPause()
 void MainWindow::updatePosition()
 {
     if (!mpv || userSeeking) {
+        return;
+    }
+
+    if (usingTimelinePlaylist && !timelineSegments.isEmpty()) {
+        int64_t playlistPos = 0;
+        if (mpv_get_property(mpv, "playlist-pos", MPV_FORMAT_INT64, &playlistPos) >= 0) {
+            double position = 0.0;
+            if (mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &position) >= 0) {
+                if (playlistPos >= 0 && playlistPos < timelineSegments.size()) {
+                    const TimelineSegment &segment = timelineSegments.at(static_cast<int>(playlistPos));
+                    double timelinePos = segment.timelineStart + position;
+                    currentTimelinePos = timelinePos;
+                    const int sliderValue = static_cast<int>(timelinePos * 1000.0);
+                    seekSlider->blockSignals(true);
+                    seekSlider->setValue(sliderValue);
+                    seekSlider->blockSignals(false);
+                }
+            }
+        }
+
+        int paused = 0;
+        if (mpv_get_property(mpv, "pause", MPV_FORMAT_FLAG, &paused) >= 0) {
+            updatePlayButton(paused == 0);
+        }
         return;
     }
 
@@ -335,7 +366,11 @@ void MainWindow::endSeek()
 
     const int sliderValue = seekSlider->value();
     double position = sliderValue / 1000.0;
-    mpv_set_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &position);
+    if (usingTimelinePlaylist) {
+        seekToTimelineTime(position);
+    } else {
+        mpv_set_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &position);
+    }
     userSeeking = false;
 }
 
@@ -351,23 +386,188 @@ void MainWindow::updatePlayButton(bool isPlaying)
 void MainWindow::onClipSelected(int index)
 {
     qDebug() << "Clip selected:" << index;
-    
-    // Load and play the selected clip
     const QVector<Clip>& clips = timeline->clips();
     if (index >= 0 && index < clips.size()) {
         const Clip &clip = clips[index];
-        const char *cmd[] = {"loadfile", clip.filePath().toUtf8().constData(), NULL};
-        mpv_command(mpv, cmd);
-        
-        // Seek to trim start if needed
-        if (clip.trimStart() > 0) {
-            double trimStart = clip.trimStart();
-            mpv_set_property_async(mpv, 0, "time-pos", MPV_FORMAT_DOUBLE, &trimStart);
-        }
+        rebuildTimelinePlaylist(true);
+        seekToTimelineTime(clip.startTime());
     }
 }
 
 void MainWindow::onTimelineChanged()
 {
-    qDebug() << "Timeline changed, total duration:" << timeline->totalDuration();
+    rebuildTimelinePlaylist(true);
+}
+
+void MainWindow::rebuildTimelinePlaylist(bool preservePosition)
+{
+    if (!mpv || !timeline) {
+        return;
+    }
+
+    double previousTimelinePos = currentTimelinePos;
+    int paused = 0;
+    mpv_get_property(mpv, "pause", MPV_FORMAT_FLAG, &paused);
+
+    timelineSegments.clear();
+    QVector<Clip> sortedClips = timeline->clips();
+    std::sort(sortedClips.begin(), sortedClips.end(), [](const Clip &a, const Clip &b) {
+        return a.startTime() < b.startTime();
+    });
+
+    double cursor = 0.0;
+    for (const Clip &clip : sortedClips) {
+        if (clip.duration() <= 0.0) {
+            continue;
+        }
+
+        double start = clip.startTime();
+        if (start < 0.0) {
+            start = 0.0;
+        }
+
+        if (start > cursor) {
+            TimelineSegment gapSegment;
+            gapSegment.timelineStart = cursor;
+            gapSegment.duration = start - cursor;
+            gapSegment.trimStart = 0.0;
+            gapSegment.isGap = true;
+            gapSegment.source = QString("lavfi:color=c=black:s=1280x720:r=30:d=%1")
+                                   .arg(gapSegment.duration, 0, 'f', 3);
+            timelineSegments.append(gapSegment);
+            cursor = start;
+        }
+
+        TimelineSegment segment;
+        segment.timelineStart = start;
+        segment.duration = clip.duration();
+        segment.trimStart = clip.trimStart();
+        segment.isGap = false;
+        segment.source = clip.filePath();
+        timelineSegments.append(segment);
+        cursor = std::max(cursor, start + clip.duration());
+    }
+
+    if (timelineSegments.isEmpty()) {
+        const char *cmd[] = {"playlist-clear", NULL};
+        mpv_command(mpv, cmd);
+        usingTimelinePlaylist = false;
+        mediaDuration = 0.0;
+        seekSlider->setRange(0, 0);
+        playPauseButton->setEnabled(false);
+        seekSlider->setEnabled(false);
+        currentTimelinePos = 0.0;
+        return;
+    }
+
+    const char *clearCmd[] = {"playlist-clear", NULL};
+    mpv_command(mpv, clearCmd);
+
+    bool first = true;
+    for (const TimelineSegment &segment : timelineSegments) {
+        QByteArray sourceBytes = QFile::encodeName(segment.source);
+        const char *mode = first ? "replace" : "append";
+        QByteArray startOption;
+        QByteArray endOption;
+        if (!segment.isGap) {
+            double clipStart = segment.trimStart;
+            double clipEnd = segment.trimStart + segment.duration;
+            startOption = QByteArray("start=") + QByteArray::number(clipStart, 'f', 3);
+            endOption = QByteArray("end=") + QByteArray::number(clipEnd, 'f', 3);
+        }
+
+        if (!segment.isGap) {
+            const char *cmd[] = {"loadfile", sourceBytes.constData(), mode, startOption.constData(), endOption.constData(), NULL};
+            mpv_command(mpv, cmd);
+        } else {
+            const char *cmd[] = {"loadfile", sourceBytes.constData(), mode, NULL};
+            mpv_command(mpv, cmd);
+        }
+        first = false;
+    }
+
+    usingTimelinePlaylist = true;
+    mediaDuration = timeline->totalDuration();
+    seekSlider->setRange(0, static_cast<int>(mediaDuration * 1000.0));
+    playPauseButton->setEnabled(true);
+    seekSlider->setEnabled(true);
+
+    if (preservePosition) {
+        seekToTimelineTime(previousTimelinePos);
+    }
+
+    mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &paused);
+}
+
+void MainWindow::seekToTimelineTime(double timelineTime)
+{
+    if (!mpv || timelineSegments.isEmpty()) {
+        return;
+    }
+
+    if (timelineTime < 0.0) {
+        timelineTime = 0.0;
+    }
+
+    double totalDuration = timeline->totalDuration();
+    if (totalDuration > 0.0 && timelineTime > totalDuration) {
+        timelineTime = totalDuration;
+    }
+
+    int index = -1;
+    double localPos = 0.0;
+    if (!segmentForTimelineTime(timelineTime, index, localPos)) {
+        return;
+    }
+
+    int64_t playlistPos = index;
+    mpv_set_property(mpv, "playlist-pos", MPV_FORMAT_INT64, &playlistPos);
+    mpv_set_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &localPos);
+    currentTimelinePos = timelineTime;
+}
+
+bool MainWindow::segmentForTimelineTime(double timelineTime, int &index, double &localPos) const
+{
+    if (timelineSegments.isEmpty()) {
+        return false;
+    }
+
+    for (int i = 0; i < timelineSegments.size(); ++i) {
+        const TimelineSegment &segment = timelineSegments.at(i);
+        if (timelineTime >= segment.timelineStart && timelineTime <= segment.timelineStart + segment.duration) {
+            index = i;
+            localPos = timelineTime - segment.timelineStart;
+            return true;
+        }
+    }
+
+    const TimelineSegment &lastSegment = timelineSegments.last();
+    index = timelineSegments.size() - 1;
+    localPos = std::max(0.0, lastSegment.duration - 0.01);
+    return true;
+}
+
+bool MainWindow::timelinePositionForMpv(double &timelinePos) const
+{
+    if (!mpv || !usingTimelinePlaylist) {
+        return false;
+    }
+
+    int64_t playlistPos = 0;
+    if (mpv_get_property(mpv, "playlist-pos", MPV_FORMAT_INT64, &playlistPos) < 0) {
+        return false;
+    }
+
+    double position = 0.0;
+    if (mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &position) < 0) {
+        return false;
+    }
+
+    if (playlistPos < 0 || playlistPos >= timelineSegments.size()) {
+        return false;
+    }
+
+    const TimelineSegment &segment = timelineSegments.at(static_cast<int>(playlistPos));
+    timelinePos = segment.timelineStart + position;
+    return true;
 }
