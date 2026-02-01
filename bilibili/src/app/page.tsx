@@ -2,12 +2,7 @@
 
 import { type PlayerRef } from "@remotion/player";
 import type { NextPage } from "next";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { z } from "zod";
-import {
-  defaultMyCompProps,
-  MyCompProps,
-} from "../../types/constants";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import {
   StudioLayout,
   StudioToolbar,
@@ -30,9 +25,19 @@ const clampFrame = (frame: number, totalFrames: number) =>
   Math.min(Math.max(frame, 0), totalFrames - 1);
 
 const Home: NextPage = () => {
-  const [text] = useState<string>(defaultMyCompProps.title);
-  const { project, isDirty, updateClip, updateProject, createProject, loadProject, saveProject, listProjects, removeClip } = useProjectStore();
-  const totalFrames = project.durationInFrames ?? compositionPreviewConfig.durationInFrames;
+  const {
+    project,
+    isDirty,
+    updateClip,
+    updateProject,
+    createProject,
+    loadProject,
+    saveProject,
+    listProjects,
+    removeClip,
+  } = useProjectStore();
+  const totalFrames =
+    project.durationInFrames ?? compositionPreviewConfig.durationInFrames;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [snapEnabled, setSnapEnabled] = useState(true);
@@ -51,20 +56,17 @@ const Home: NextPage = () => {
   const playerRef = useRef<PlayerRef>(null);
 
   // Resolve project data to composition props for live preview
+  // This is properly memoized via useResolvedCompositionProps hook
   const compositionProps = useResolvedCompositionProps(project);
-
-  const inputProps: z.infer<typeof MyCompProps> = useMemo(() => {
-    return {
-      title: text,
-    };
-  }, [text]);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadInitialProject = async () => {
       try {
-        const lastProjectId = globalThis.localStorage?.getItem("mvideo:lastProjectId");
+        const lastProjectId = globalThis.localStorage?.getItem(
+          "mvideo:lastProjectId",
+        );
         if (lastProjectId) {
           await loadProject(lastProjectId);
           return;
@@ -98,13 +100,17 @@ const Home: NextPage = () => {
   // Initialize project settings from composition config only if project has default/uninitialized values
   useEffect(() => {
     // Only sync on initial load if project has no tracks/clips (empty project)
-    if (isProjectReady && project.tracks.length === 0 && project.assets.length === 0) {
-      const needsInit = 
+    if (
+      isProjectReady &&
+      project.tracks.length === 0 &&
+      project.assets.length === 0
+    ) {
+      const needsInit =
         project.durationInFrames === undefined ||
         project.fps === undefined ||
         project.width === undefined ||
         project.height === undefined;
-      
+
       if (needsInit) {
         updateProject({
           durationInFrames: totalFrames,
@@ -122,11 +128,13 @@ const Home: NextPage = () => {
     }
 
     const handle = window.setTimeout(() => {
-      void saveProject(project).then((saved) => {
-        globalThis.localStorage?.setItem("mvideo:lastProjectId", saved.id);
-      }).catch((error) => {
-        console.error("Failed to save project", error);
-      });
+      void saveProject(project)
+        .then((saved) => {
+          globalThis.localStorage?.setItem("mvideo:lastProjectId", saved.id);
+        })
+        .catch((error) => {
+          console.error("Failed to save project", error);
+        });
     }, 800);
 
     return () => {
@@ -151,13 +159,17 @@ const Home: NextPage = () => {
     [totalFrames],
   );
 
-  const handleTogglePlay = useCallback(() => {
-    if (isPlaying) {
-      playerRef.current?.pause();
-    } else {
-      playerRef.current?.play();
-    }
-  }, [isPlaying]);
+  const handleTogglePlay = useCallback(
+    (e?: React.SyntheticEvent) => {
+      if (isPlaying) {
+        playerRef.current?.pause();
+      } else {
+        // Pass the user interaction event to play() for better autoplay compatibility
+        playerRef.current?.play(e);
+      }
+    },
+    [isPlaying],
+  );
 
   const handleStep = useCallback(
     (delta: number) => {
@@ -249,7 +261,9 @@ const Home: NextPage = () => {
         return;
       }
 
-      const track = project.tracks.find((value) => value.id === selectedTrackId);
+      const track = project.tracks.find(
+        (value) => value.id === selectedTrackId,
+      );
       const clip = track?.clips.find((value) => value.id === selectedClipId);
       if (!clip) {
         return;
@@ -266,7 +280,10 @@ const Home: NextPage = () => {
       if (updates.startFrame !== undefined) {
         partial.startFrame = Math.max(0, updates.startFrame);
       }
-      if (updates.durationInFrames !== undefined || updates.trimEndFrame !== undefined) {
+      if (
+        updates.durationInFrames !== undefined ||
+        updates.trimEndFrame !== undefined
+      ) {
         partial.durationInFrames = nextDuration;
       }
       if (updates.trimStartFrame !== undefined) {
@@ -282,7 +299,7 @@ const Home: NextPage = () => {
 
   // Keyboard shortcuts
   useStudioKeyboardShortcuts({
-    onPlayPause: handleTogglePlay,
+    onPlayPause: () => handleTogglePlay(),
     onStepForward: () => handleStep(1),
     onStepBackward: () => handleStep(-1),
     onStepForwardLarge: () => handleStep(5),

@@ -146,7 +146,7 @@ interface StudioToolbarProps {
   fps: number;
   activeTool: "select" | "razor" | "hand";
   onNewProject?: () => void;
-  onTogglePlay: () => void;
+  onTogglePlay: (e?: React.SyntheticEvent) => void;
   onStepBackward: () => void;
   onStepForward: () => void;
   onSkipToStart: () => void;
@@ -266,7 +266,7 @@ export const StudioToolbar = ({
                 ? "bg-studio-playhead text-white"
                 : "bg-studio-accent text-white hover:bg-studio-accent-hover"
             }`}
-            onClick={onTogglePlay}
+            onClick={(e) => onTogglePlay(e)}
             title="Play/Pause (Space)"
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}

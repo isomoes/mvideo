@@ -15,43 +15,38 @@ interface PreviewPlayerProps {
   width: number;
   height: number;
   currentFrame: number;
-  isPlaying: boolean;
+  // isPlaying is managed internally via player events
   onFrameChange: (frame: number) => void;
   onPlayingChange: (playing: boolean) => void;
   playerRef: React.RefObject<PlayerRef | null>;
 }
 
-const formatTimecode = (frame: number, fps: number) => {
-  const totalSeconds = Math.floor(frame / fps);
-  const hours = Math.floor(totalSeconds / 3600)
-    .toString()
-    .padStart(2, "0");
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-    .toString()
-    .padStart(2, "0");
-  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
-  const frames = (frame % fps).toString().padStart(2, "0");
-  return `${hours}:${minutes}:${seconds}:${frames}`;
-};
-
-export const PreviewPlayer = ({
+/**
+ * PlayerOnly component - Renders only the Remotion Player
+ * This component is isolated to prevent unnecessary re-renders
+ * Following Remotion best practices: https://www.remotion.dev/docs/player/best-practices
+ */
+const PlayerOnly: React.FC<{
+  playerRef: React.RefObject<PlayerRef | null>;
+  component: React.ComponentType<any>;
+  inputProps: Record<string, any>;
+  durationInFrames: number;
+  fps: number;
+  width: number;
+  height: number;
+  onFrameChange: (frame: number) => void;
+  onPlayingChange: (playing: boolean) => void;
+}> = ({
+  playerRef,
   component,
   inputProps,
   durationInFrames,
   fps,
   width,
   height,
-  currentFrame,
-  isPlaying,
   onFrameChange,
   onPlayingChange,
-  playerRef,
-}: PreviewPlayerProps) => {
-  const scrubberRef = useRef<HTMLDivElement>(null);
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [inPoint, setInPoint] = useState<number | null>(null);
-  const [outPoint, setOutPoint] = useState<number | null>(null);
-
+}) => {
   // Set up event listeners for the player
   useEffect(() => {
     const player = playerRef.current;
@@ -79,6 +74,66 @@ export const PreviewPlayer = ({
       player.removeEventListener("frameupdate", onFrameUpdate);
     };
   }, [playerRef, onFrameChange, onPlayingChange]);
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center">
+      <div
+        className="relative overflow-hidden rounded shadow-2xl"
+        style={{
+          maxWidth: "100%",
+          maxHeight: "100%",
+          aspectRatio: `${width}/${height}`,
+        }}
+      >
+        <Player
+          ref={playerRef}
+          component={component}
+          inputProps={inputProps}
+          durationInFrames={durationInFrames}
+          fps={fps}
+          compositionHeight={height}
+          compositionWidth={width}
+          style={{
+            width: "100%",
+            height: "100%",
+          }}
+          controls={false}
+          clickToPlay={false}
+          doubleClickToFullscreen={false}
+          spaceKeyToPlayOrPause={false}
+          logLevel="trace"
+        />
+      </div>
+    </div>
+  );
+};
+
+/**
+ * ControlsOnly component - Renders player controls and UI
+ * This component can re-render frequently without affecting the Player
+ * Following Remotion best practices to separate controls from Player
+ */
+const ControlsOnly: React.FC<{
+  playerRef: React.RefObject<PlayerRef | null>;
+  currentFrame: number;
+  durationInFrames: number;
+  fps: number;
+  width: number;
+  height: number;
+  onFrameChange: (frame: number) => void;
+}> = ({
+  playerRef,
+  currentFrame,
+  durationInFrames,
+  fps,
+  width,
+  height,
+  onFrameChange,
+}) => {
+  const scrubberRef = useRef<HTMLDivElement>(null);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [inPoint, setInPoint] = useState<number | null>(null);
+  const [outPoint, setOutPoint] = useState<number | null>(null);
 
   const handleScrub = useCallback(
     (clientX: number) => {
@@ -139,7 +194,7 @@ export const PreviewPlayer = ({
     outPoint !== null ? (outPoint / (durationInFrames - 1)) * 100 : null;
 
   return (
-    <div className="flex flex-col h-full">
+    <>
       {/* Panel Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-studio-panel-header border-b border-studio-border">
         <div className="flex items-center gap-3">
@@ -176,39 +231,6 @@ export const PreviewPlayer = ({
               Clear
             </button>
           )}
-        </div>
-      </div>
-
-      {/* Video Preview Area */}
-      <div className="flex-1 flex items-center justify-center bg-black p-4 min-h-0">
-        <div className="relative w-full h-full flex items-center justify-center">
-          <div
-            className="relative overflow-hidden rounded shadow-2xl"
-            style={{
-              maxWidth: "100%",
-              maxHeight: "100%",
-              aspectRatio: `${width}/${height}`,
-            }}
-          >
-            <Player
-              ref={playerRef}
-              component={component}
-              inputProps={inputProps}
-              durationInFrames={durationInFrames}
-              fps={fps}
-              compositionHeight={height}
-              compositionWidth={width}
-              style={{
-                width: "100%",
-                height: "100%",
-              }}
-              controls={false}
-              clickToPlay={false}
-              doubleClickToFullscreen={false}
-              spaceKeyToPlayOrPause={false}
-              logLevel="trace"
-            />
-          </div>
         </div>
       </div>
 
@@ -344,6 +366,67 @@ export const PreviewPlayer = ({
             +10f
           </button>
         </div>
+      </div>
+    </>
+  );
+};
+
+const formatTimecode = (frame: number, fps: number) => {
+  const totalSeconds = Math.floor(frame / fps);
+  const hours = Math.floor(totalSeconds / 3600)
+    .toString()
+    .padStart(2, "0");
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+    .toString()
+    .padStart(2, "0");
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+  const frames = (frame % fps).toString().padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}:${frames}`;
+};
+
+/**
+ * PreviewPlayer component - Following Remotion best practices
+ * Separates Player rendering from controls to prevent unnecessary re-renders
+ * @see https://www.remotion.dev/docs/player/best-practices
+ */
+export const PreviewPlayer = ({
+  component,
+  inputProps,
+  durationInFrames,
+  fps,
+  width,
+  height,
+  currentFrame,
+  onFrameChange,
+  onPlayingChange,
+  playerRef,
+}: PreviewPlayerProps) => {
+  return (
+    <div className="flex flex-col h-full">
+      {/* Controls component handles all UI that updates frequently */}
+      <ControlsOnly
+        playerRef={playerRef}
+        currentFrame={currentFrame}
+        durationInFrames={durationInFrames}
+        fps={fps}
+        width={width}
+        height={height}
+        onFrameChange={onFrameChange}
+      />
+
+      {/* Video Preview Area - Player component is isolated */}
+      <div className="flex-1 flex items-center justify-center bg-black p-4 min-h-0">
+        <PlayerOnly
+          playerRef={playerRef}
+          component={component}
+          inputProps={inputProps}
+          durationInFrames={durationInFrames}
+          fps={fps}
+          width={width}
+          height={height}
+          onFrameChange={onFrameChange}
+          onPlayingChange={onPlayingChange}
+        />
       </div>
     </div>
   );
