@@ -115,36 +115,31 @@ export const Clip: React.FC<ClipProps> = ({
         isSelected ? "ring-2 ring-white shadow-lg z-10" : "hover:brightness-110"
       } ${isDragging ? "opacity-80 cursor-grabbing" : ""}`}
       style={{
-        left: clip.startFrame * pixelsPerFrame,
-        width: Math.max(clip.durationInFrames * pixelsPerFrame, 4),
+        left: (clip.startFrame + trimStart) * pixelsPerFrame,
+        width: Math.max((clip.durationInFrames - trimStart) * pixelsPerFrame, 4),
       }}
       onPointerDown={(e) => handlePointerDown(e, "move")}
     >
       {thumbnailUrl && (
-        <div className="absolute inset-0">
+        <div className="absolute inset-0" style={{ left: -trimStart * pixelsPerFrame }}>
           <img
             src={thumbnailUrl}
             alt={asset?.name ?? clip.id}
-            className="h-full w-full object-cover opacity-70"
+            className="h-full object-cover opacity-70"
+            style={{ width: clip.durationInFrames * pixelsPerFrame }}
             loading="lazy"
           />
           <div className="absolute inset-0 bg-black/30" />
         </div>
       )}
       {isAudio && (
-        <Waveform
-          assetId={asset?.id ?? clip.assetId}
-          durationInFrames={clip.durationInFrames}
-          pixelsPerFrame={pixelsPerFrame}
-        />
-      )}
-      
-      {/* Show trimmed region indicator */}
-      {hasTrims && (
-        <div className="absolute left-0 top-0 bottom-0 bg-black/40 pointer-events-none z-5" 
-             style={{ width: trimStart * pixelsPerFrame }} 
-             title={`Trimmed: ${trimStart} frames`}
-        />
+        <div className="absolute inset-0" style={{ left: -trimStart * pixelsPerFrame }}>
+          <Waveform
+            assetId={asset?.id ?? clip.assetId}
+            durationInFrames={clip.durationInFrames}
+            pixelsPerFrame={pixelsPerFrame}
+          />
+        </div>
       )}
       
       <div className="flex items-center h-full px-2 overflow-hidden pointer-events-none relative z-10">
@@ -155,8 +150,7 @@ export const Clip: React.FC<ClipProps> = ({
       
       {/* Trim handles - more visible */}
       <div
-        className={`absolute top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/50 transition-colors z-20 ${isTrimmingStart ? "bg-white/70" : ""}`}
-        style={{ left: trimStart * pixelsPerFrame }}
+        className={`absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/50 transition-colors z-20 ${isTrimmingStart ? "bg-white/70" : ""}`}
         onPointerDown={(e) => handlePointerDown(e, "trim-start")}
         title="Drag to trim start"
       >
